@@ -136,11 +136,18 @@ def test_silence_detection_slicing():
     assert len(recorder.audio_buffers) == 2
     assert callback_mock.call_count == 0
     
-    # 3. Provide another 0.5 seconds of silence to cross the 1.0s mark
+    # 3. Provide another 0.5 seconds of silence
     silent_data_2 = np.zeros((8000, 1), dtype=np.float32)
     recorder._callback(silent_data_2, len(silent_data_2), {}, None)
+    assert recorder.silence_timer_seconds == 1.0
+    assert len(recorder.audio_buffers) == 3
+    assert callback_mock.call_count == 0
+
+    # 4. Provide another 0.5 seconds of silence to cross the 1.5s mark
+    silent_data_3 = np.zeros((8000, 1), dtype=np.float32)
+    recorder._callback(silent_data_3, len(silent_data_3), {}, None)
     
-    # The 1.0s silence should trigger a slice, clear the buffer, and call the callback
+    # The 1.5s silence should trigger a slice, clear the buffer, and call the callback
     assert recorder.silence_timer_seconds == 0.0
     assert len(recorder.audio_buffers) == 0  # Buffer cleared seamlessly
     assert callback_mock.call_count == 1

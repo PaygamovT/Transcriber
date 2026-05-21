@@ -24,7 +24,7 @@ class AudioRecorder:
         self.is_recording = False
         
         # Silence Detection & Auto-Slicing parameters
-        self.silence_threshold = 0.015
+        self.silence_threshold = 0.01
         self.silence_timer_seconds = 0.0
         self.silence_detected_callback = None
         self.voice_detected = False
@@ -53,7 +53,7 @@ class AudioRecorder:
                     self.silence_timer_seconds = 0.0
                 else:
                     self.silence_timer_seconds += block_duration
-                    if self.silence_timer_seconds >= 1.0:
+                    if self.silence_timer_seconds >= 1.5:
                         if self.voice_detected and self.audio_buffers:
                             # Slice segment (concatenate all buffers up to now)
                             logger.debug("Silence threshold reached 1.0s. Slicing audio segment.")

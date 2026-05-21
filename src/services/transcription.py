@@ -22,6 +22,7 @@ class TranscriptionService:
         self.provider = provider or "openrouter"
         self.chat_model = chat_model
         self.endpoint = "https://openrouter.ai/api/v1/audio/transcriptions"
+        self.last_context = ""
         logger.debug(f"TranscriptionService initialized with provider: {self.provider}, model: {self.model}")
         logger.debug("TranscriptionService.__init__ exiting successfully")
  
@@ -70,6 +71,8 @@ class TranscriptionService:
             data = {
                 "model": self.model
             }
+            if mode == "normal" and getattr(self, "last_context", ""):
+                data["prompt"] = self.last_context
             
             masked_key = self.api_key[:4] + "..." + self.api_key[-4:] if len(self.api_key) > 8 else "..."
             logger.info(f"Sending {self.provider} transcription request to {url}")
@@ -84,6 +87,9 @@ class TranscriptionService:
                 response.raise_for_status()
                 result = response.json()
                 transcribed_text = result.get("text", "").strip()
+                
+                if mode == "normal" and transcribed_text:
+                    self.last_context = transcribed_text[-200:] if len(transcribed_text) > 200 else transcribed_text
                 
             except requests.RequestException as e:
                 latency = time.time() - start_time
@@ -212,6 +218,8 @@ class TranscriptionService:
                         "Return ONLY the transcribed text in its original language, exactly as spoken. "
                         "No explanations, no translations, no prefixes."
                     )
+                    if getattr(self, "last_context", ""):
+                        prompt += f"\n\nContext from previous audio segment (use this only to understand the context, do NOT repeat it): \"{self.last_context}\""
                 
                 payload = {
                     "model": self.model,
@@ -257,6 +265,9 @@ class TranscriptionService:
                         transcribed_text = choices[0].get("message", {}).get("content", "")
                     else:
                         transcribed_text = ""
+                
+                if mode == "normal" and transcribed_text:
+                    self.last_context = transcribed_text[-200:] if len(transcribed_text) > 200 else transcribed_text
                 
                 logger.debug(f"Transcription result: '{transcribed_text}'")
                 return transcribed_text

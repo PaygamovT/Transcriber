@@ -158,8 +158,9 @@ class AppManager(QObject):
             self.transcription_service.model = self.config.get("model")
             self.transcription_service.system_prompt = self.config.get("system_prompt")
             
-            # Reset active segment workers
+            # Reset active segment workers and context
             self.active_segment_workers.clear()
+            self.transcription_service.last_context = ""
             
             # Enable silence detection strictly in normal transcription mode
             mode = self.config.get("transcription_mode") or "normal"
