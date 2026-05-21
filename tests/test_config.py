@@ -17,7 +17,7 @@ def test_default_config_loading(tmp_path):
     assert manager.get("hotkey") == "<ctrl>+<shift>+<space>"
     assert manager.get("audio_duration_limit") == 30
     assert manager.get("insert_mode") == "typewriter"
-    assert manager.get("transcription_mode") == "normal"
+    assert manager.get("transcription_mode") == "clean"
     
     # Assert it created the default file on disk
     config_file = config_dir / "config.json"
@@ -85,7 +85,7 @@ def test_validation_rules(tmp_path):
     
     # Validation for transcription_mode
     manager.set("transcription_mode", "invalid_trans_mode")
-    assert manager.get("transcription_mode") == "normal"  # Should remain default
+    assert manager.get("transcription_mode") == "clean"  # Should remain default
     
     manager.set("transcription_mode", "clean")
     assert manager.get("transcription_mode") == "clean"  # Should accept valid mode

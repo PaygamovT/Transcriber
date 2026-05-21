@@ -26,12 +26,12 @@ class TranscriptionService:
         logger.debug(f"TranscriptionService initialized with provider: {self.provider}, model: {self.model}")
         logger.debug("TranscriptionService.__init__ exiting successfully")
  
-    def transcribe(self, wav_bytes: bytes, mode: str = "normal") -> str:
+    def transcribe(self, wav_bytes: bytes, mode: str = "clean") -> str:
         """Sends WAV audio bytes to the active provider for transcription.
         
         Args:
             wav_bytes: Raw bytes of the audio file in WAV format.
-            mode: The transcription mode ("normal", "clean", "translate").
+            mode: The transcription mode ("clean", "translate").
             
         Returns:
             The transcribed (and potentially cleaned/translated) text.
@@ -52,7 +52,7 @@ class TranscriptionService:
             logger.error("Audio data is empty")
             raise ValueError("Audio data is empty")
  
-        if mode not in ("normal", "clean", "translate"):
+        if mode not in ("clean", "translate"):
             logger.error(f"Invalid mode passed: {mode}")
             raise ValueError(f"Invalid transcription mode: {mode}")
             
@@ -71,8 +71,6 @@ class TranscriptionService:
             data = {
                 "model": self.model
             }
-            if mode == "normal" and getattr(self, "last_context", ""):
-                data["prompt"] = self.last_context
             
             masked_key = self.api_key[:4] + "..." + self.api_key[-4:] if len(self.api_key) > 8 else "..."
             logger.info(f"Sending {self.provider} transcription request to {url}")
@@ -87,9 +85,6 @@ class TranscriptionService:
                 response.raise_for_status()
                 result = response.json()
                 transcribed_text = result.get("text", "").strip()
-                
-                if mode == "normal" and transcribed_text:
-                    self.last_context = transcribed_text[-200:] if len(transcribed_text) > 200 else transcribed_text
                 
             except requests.RequestException as e:
                 latency = time.time() - start_time
@@ -201,7 +196,7 @@ class TranscriptionService:
                         "3. Maintain a natural, correct, and fluent grammatical structure of the spoken language.\n"
                         "4. Output ONLY the clean transcription without any introductory or concluding remarks."
                     )
-                elif mode == "translate":
+                else:  # translate mode
                     prompt = (
                         "You are an expert translator and speech transcriber. Your task is to transcribe the speech from the provided audio, clean it up completely, and translate it into natural, fluent English.\n"
                         "Specifically, you must:\n"
@@ -209,17 +204,6 @@ class TranscriptionService:
                         "2. Translate the cleaned speech directly into natural, grammatically correct English.\n"
                         "3. Output ONLY the final English translation without any introductory or concluding remarks."
                     )
-                else:  # normal mode using chat completions
-                    prompt = self.system_prompt or (
-                        "You are a pure audio transcription tool. Your ONLY task is to transcribe exactly what is spoken in the audio. "
-                        "Do NOT generate new text, do NOT hallucinate, do NOT complete sentences, and do NOT add any extra information. "
-                        "If you hear nothing or only noise, return an empty string. "
-                        "The audio may contain speech in Russian, English, or Uzbek. "
-                        "Return ONLY the transcribed text in its original language, exactly as spoken. "
-                        "No explanations, no translations, no prefixes."
-                    )
-                    if getattr(self, "last_context", ""):
-                        prompt += f"\n\nContext from previous audio segment (use this only to understand the context, do NOT repeat it): \"{self.last_context}\""
                 
                 payload = {
                     "model": self.model,
@@ -265,10 +249,6 @@ class TranscriptionService:
                         transcribed_text = choices[0].get("message", {}).get("content", "")
                     else:
                         transcribed_text = ""
-                
-                if mode == "normal" and transcribed_text:
-                    self.last_context = transcribed_text[-200:] if len(transcribed_text) > 200 else transcribed_text
-                
                 logger.debug(f"Transcription result: '{transcribed_text}'")
                 return transcribed_text
                 

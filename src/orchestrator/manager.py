@@ -20,7 +20,7 @@ class TranscriptionWorker(QThread):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, service: TranscriptionService, wav_bytes: bytes, mode: str = "normal"):
+    def __init__(self, service: TranscriptionService, wav_bytes: bytes, mode: str = "clean"):
         super().__init__()
         self.service = service
         self.wav_bytes = wav_bytes
@@ -162,9 +162,8 @@ class AppManager(QObject):
             self.active_segment_workers.clear()
             self.transcription_service.last_context = ""
             
-            # Enable silence detection strictly in normal transcription mode
-            mode = self.config.get("transcription_mode") or "normal"
-            silence_enabled = (mode == "normal")
+            # Silence-based slicing is permanently disabled since normal mode is deleted
+            silence_enabled = False
             
             logger.debug(f"Starting recorder with silence_detection_enabled={silence_enabled}")
             self.recorder.start_recording(silence_detection_enabled=silence_enabled)
@@ -199,14 +198,12 @@ class AppManager(QObject):
             if not wav_bytes:
                 logger.warning("No audio data was recorded")
                 self._set_state("idle")
-                mode = self.config.get("transcription_mode") or "normal"
-                if mode != "normal":
-                    self.notification_requested.emit("Предупреждение", "Запись пуста, транскрипция отменена.")
+                self.notification_requested.emit("Предупреждение", "Запись пуста, транскрипция отменена.")
                 return
                 
             self._set_state("transcribing")
             logger.info("Initializing TranscriptionWorker background thread")
-            mode = self.config.get("transcription_mode") or "normal"
+            mode = self.config.get("transcription_mode") or "clean"
             logger.info(f"Retrieved transcription mode: {mode}")
             self.worker = TranscriptionWorker(self.transcription_service, wav_bytes, mode=mode)
             self.worker.finished.connect(self._handle_transcription_success)
@@ -272,11 +269,9 @@ class AppManager(QObject):
         """Handles a captured silence segment on the main thread."""
         logger.debug(f"AppManager._handle_segment_captured entering. Current state: {self.state}")
         
-        # Only process segment transcription if we are in normal transcription mode AND state is recording
-        mode = self.config.get("transcription_mode") or "normal"
-        if mode != "normal" or self.state != "recording":
-            logger.warning(f"Segment ignored: mode={mode}, state={self.state}")
-            return
+        # Segment capturing is permanently inactive since normal mode is deleted.
+        logger.warning("Segment ignored: segment capturing is inactive.")
+        return
             
         logger.info("Initializing parallel TranscriptionWorker for segment")
         worker = TranscriptionWorker(self.transcription_service, wav_bytes, mode=mode)

@@ -3,92 +3,7 @@ import requests
 from unittest.mock import patch, MagicMock
 from src.services.transcription import TranscriptionService
 
-def test_transcribe_success_gemini_normal():
-    """Test successful normal transcription using Gemini model (routes to /chat/completions)."""
-    service = TranscriptionService(api_key="valid-test-key", model="google/gemini-3.1-flash-lite")
-    dummy_wav_bytes = b"RIFF....WAVEfmt...data..."
-    
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "choices": [
-            {
-                "message": {
-                    "role": "assistant",
-                    "content": "hello world from gemini"
-                }
-            }
-        ]
-    }
-    
-    with patch("requests.post", return_value=mock_response) as mock_post:
-        result = service.transcribe(dummy_wav_bytes, mode="normal")
-        
-        assert result == "hello world from gemini"
-        mock_post.assert_called_once()
-        args, kwargs = mock_post.call_args
-        assert args[0] == "https://openrouter.ai/api/v1/chat/completions"
-        assert kwargs["headers"]["Authorization"] == "Bearer valid-test-key"
-        assert kwargs["json"]["model"] == "google/gemini-3.1-flash-lite"
-        
-        user_msg = kwargs["json"]["messages"][0]
-        assert user_msg["role"] == "user"
-        assert user_msg["content"][0]["type"] == "text"
-        assert "pure audio transcription tool" in user_msg["content"][0]["text"]
-        assert user_msg["content"][1]["type"] == "input_audio"
-        assert user_msg["content"][1]["input_audio"]["format"] == "wav"
 
-def test_transcribe_success_whisper_normal():
-    """Test successful normal transcription using Whisper model (routes to /audio/transcriptions)."""
-    service = TranscriptionService(api_key="valid-test-key", model="openai/whisper-large-v3")
-    dummy_wav_bytes = b"RIFF....WAVEfmt...data..."
-    
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {"text": "hello world from whisper"}
-    
-    with patch("requests.post", return_value=mock_response) as mock_post:
-        result = service.transcribe(dummy_wav_bytes, mode="normal")
-        
-        assert result == "hello world from whisper"
-        mock_post.assert_called_once()
-        args, kwargs = mock_post.call_args
-        assert args[0] == "https://openrouter.ai/api/v1/audio/transcriptions"
-        assert kwargs["headers"]["Authorization"] == "Bearer valid-test-key"
-        assert kwargs["json"]["model"] == "openai/whisper-large-v3"
-        assert "data" in kwargs["json"]["input_audio"]
-        assert kwargs["json"]["input_audio"]["format"] == "wav"
-
-def test_transcribe_success_gemini_normal_custom_prompt():
-    """Test Gemini normal transcription with a custom system prompt."""
-    service = TranscriptionService(
-        api_key="valid-test-key", 
-        model="google/gemini-3.1-flash-lite",
-        system_prompt="Custom transcription instruction."
-    )
-    dummy_wav_bytes = b"RIFF....WAVEfmt...data..."
-    
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "choices": [
-            {
-                "message": {
-                    "role": "assistant",
-                    "content": "custom prompt response"
-                }
-            }
-        ]
-    }
-    
-    with patch("requests.post", return_value=mock_response) as mock_post:
-        result = service.transcribe(dummy_wav_bytes, mode="normal")
-        
-        assert result == "custom prompt response"
-        mock_post.assert_called_once()
-        args, kwargs = mock_post.call_args
-        user_msg = kwargs["json"]["messages"][0]
-        assert user_msg["content"][0]["text"] == "Custom transcription instruction."
 
 def test_transcribe_missing_api_key():
     """Test that transcribing with an empty API key raises ValueError."""
@@ -192,48 +107,7 @@ def test_transcribe_invalid_mode():
     with pytest.raises(ValueError, match="Invalid transcription mode"):
         service.transcribe(b"RIFF....WAVEfmt...data...", mode="invalid")
 
-def test_transcribe_success_openai_normal():
-    """Test standard normal transcription with OpenAI (multipart Whisper)."""
-    service = TranscriptionService(api_key="openai-test-key", model="whisper-1", provider="openai")
-    dummy_wav_bytes = b"RIFF....WAVEfmt...data..."
-    
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {"text": "hello from openai whisper"}
-    
-    with patch("requests.post", return_value=mock_response) as mock_post:
-        result = service.transcribe(dummy_wav_bytes, mode="normal")
-        
-        assert result == "hello from openai whisper"
-        mock_post.assert_called_once()
-        args, kwargs = mock_post.call_args
-        assert args[0] == "https://api.openai.com/v1/audio/transcriptions"
-        assert kwargs["headers"]["Authorization"] == "Bearer openai-test-key"
-        assert kwargs["data"]["model"] == "whisper-1"
-        assert "file" in kwargs["files"]
-        assert kwargs["files"]["file"][0] == "audio.wav"
-        assert kwargs["files"]["file"][1] == dummy_wav_bytes
-        assert kwargs["files"]["file"][2] == "audio/wav"
 
-def test_transcribe_success_groq_normal():
-    """Test standard normal transcription with Groq (multipart Whisper)."""
-    service = TranscriptionService(api_key="groq-test-key", model="whisper-large-v3", provider="groq")
-    dummy_wav_bytes = b"RIFF....WAVEfmt...data..."
-    
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {"text": "hello from groq whisper"}
-    
-    with patch("requests.post", return_value=mock_response) as mock_post:
-        result = service.transcribe(dummy_wav_bytes, mode="normal")
-        
-        assert result == "hello from groq whisper"
-        mock_post.assert_called_once()
-        args, kwargs = mock_post.call_args
-        assert args[0] == "https://api.groq.com/openai/v1/audio/transcriptions"
-        assert kwargs["headers"]["Authorization"] == "Bearer groq-test-key"
-        assert kwargs["data"]["model"] == "whisper-large-v3"
-        assert "file" in kwargs["files"]
 
 def test_transcribe_openai_clean_mode_pipeline():
     """Test the two-step clean mode pipeline on OpenAI (Whisper + Chat Completion)."""

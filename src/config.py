@@ -31,7 +31,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     ),
     "audio_duration_limit": 30,
     "insert_mode": "typewriter",
-    "transcription_mode": "normal"
+    "transcription_mode": "clean"
 }
 
 class ConfigManager:
@@ -113,6 +113,11 @@ class ConfigManager:
                 logger.info("Upgrading default insert_mode from clipboard to typewriter")
                 self.config_data["insert_mode"] = "typewriter"
                 self.save()
+                
+            if self.config_data.get("transcription_mode") == "normal":
+                logger.info("Upgrading deprecated normal transcription mode to clean mode")
+                self.config_data["transcription_mode"] = "clean"
+                self.save()
                     
             logger.info("Configuration successfully loaded from file")
         except Exception as e:
@@ -182,7 +187,7 @@ class ConfigManager:
             logger.error(f"Validation error for {key}: '{value}' is not a valid mode.")
             return
 
-        if key == "transcription_mode" and value not in ("normal", "clean", "translate"):
+        if key == "transcription_mode" and value not in ("clean", "translate"):
             logger.error(f"Validation error for {key}: '{value}' is not a valid transcription mode.")
             return
 

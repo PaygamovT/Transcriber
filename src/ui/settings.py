@@ -187,7 +187,6 @@ class SettingsDialog(QDialog):
         
         # Transcription Mode
         self.transcription_mode_combo = QComboBox()
-        self.transcription_mode_combo.addItem("Обычная транскрипция (Normal)", "normal")
         self.transcription_mode_combo.addItem("Очистка от повторов и пауз (Clean)", "clean")
         self.transcription_mode_combo.addItem("Очистка + Перевод на английский (Translate)", "translate")
         page_rec_layout.addRow(QLabel("Transcription Mode"), self.transcription_mode_combo)

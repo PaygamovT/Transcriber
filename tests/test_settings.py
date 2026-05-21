@@ -60,7 +60,7 @@ def test_settings_dialog_initialization():
         "hotkey": "<ctrl>+<shift>+space",
         "audio_duration_limit": 30,
         "insert_mode": "clipboard",
-        "transcription_mode": "normal",
+        "transcription_mode": "clean",
         "system_prompt": "transcribe precisely"
     }.get(key, "")
     
@@ -162,7 +162,7 @@ def test_settings_dialog_save():
         "hotkey": "<ctrl>+<shift>+space",
         "audio_duration_limit": 30,
         "insert_mode": "clipboard",
-        "transcription_mode": "normal",
+        "transcription_mode": "clean",
         "system_prompt": "transcribe precisely"
     }.get(key, "")
     
