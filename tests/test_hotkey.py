@@ -7,7 +7,7 @@ def test_hotkey_listener_initialization():
     mock_callback = MagicMock()
     listener = HotkeyListener(hotkey_str="<ctrl>+<shift>+space", callback=mock_callback)
     
-    assert listener.hotkey_str == "<ctrl>+<shift>+space"
+    assert listener.hotkey_str == "<ctrl>+<shift>+<space>"
     assert listener.callback == mock_callback
     assert listener.listener is None
 
@@ -29,7 +29,7 @@ def test_hotkey_listener_lifecycle(mock_global_hotkeys_class):
     
     # Check that it instantiated GlobalHotKeys with the correct hotkey dict mapping to _on_triggered
     hotkeys_dict = mock_global_hotkeys_class.call_args[0][0]
-    assert "<ctrl>+<shift>+space" in hotkeys_dict
+    assert "<ctrl>+<shift>+<space>" in hotkeys_dict
     
     # 2. Trigger the callback through the internal trigger method
     listener._on_triggered()

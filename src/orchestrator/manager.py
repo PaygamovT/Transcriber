@@ -20,16 +20,17 @@ class TranscriptionWorker(QThread):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, service: TranscriptionService, wav_bytes: bytes):
+    def __init__(self, service: TranscriptionService, wav_bytes: bytes, mode: str = "normal"):
         super().__init__()
         self.service = service
         self.wav_bytes = wav_bytes
-        logger.debug("TranscriptionWorker initialized")
+        self.mode = mode
+        logger.debug(f"TranscriptionWorker initialized with mode: {mode}")
 
     def run(self):
-        logger.debug("TranscriptionWorker thread run starting")
+        logger.debug(f"TranscriptionWorker thread run starting. Mode: {self.mode}")
         try:
-            text = self.service.transcribe(self.wav_bytes)
+            text = self.service.transcribe(self.wav_bytes, self.mode)
             logger.debug("TranscriptionWorker thread completed successfully")
             self.finished.emit(text)
         except Exception as e:
@@ -61,7 +62,8 @@ class AppManager(QObject):
             
         self.transcription_service = TranscriptionService(
             api_key=self.config.get("api_key"),
-            model=self.config.get("model")
+            model=self.config.get("model"),
+            system_prompt=self.config.get("system_prompt")
         )
         
         self.state = "idle"
@@ -138,6 +140,7 @@ class AppManager(QObject):
             # Sync any new settings
             self.transcription_service.api_key = self.config.get("api_key")
             self.transcription_service.model = self.config.get("model")
+            self.transcription_service.system_prompt = self.config.get("system_prompt")
             
             logger.debug("Starting recorder")
             self.recorder.start_recording()
@@ -177,7 +180,9 @@ class AppManager(QObject):
                 return
                 
             logger.info("Initializing TranscriptionWorker background thread")
-            self.worker = TranscriptionWorker(self.transcription_service, wav_bytes)
+            mode = self.config.get("transcription_mode") or "normal"
+            logger.info(f"Retrieved transcription mode: {mode}")
+            self.worker = TranscriptionWorker(self.transcription_service, wav_bytes, mode=mode)
             self.worker.finished.connect(self._handle_transcription_success)
             self.worker.error.connect(self._handle_transcription_error)
             self.worker.start()
@@ -242,6 +247,7 @@ class AppManager(QObject):
         # Update model settings on the transcription service
         self.transcription_service.api_key = self.config.get("api_key")
         self.transcription_service.model = self.config.get("model")
+        self.transcription_service.system_prompt = self.config.get("system_prompt")
         logger.info("Configuration successfully reloaded")
 
     def shutdown(self) -> None:

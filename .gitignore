@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local configuration/API keys
+.env
+local_settings.json
+config.json
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Untracked custom agent folders
+.agents/
+.ai-factory/
+.agent/

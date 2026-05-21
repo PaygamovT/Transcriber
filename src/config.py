@@ -12,14 +12,15 @@ logger.setLevel(getattr(logging, log_level_env, logging.DEBUG))
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "api_key": "",
-    "model": "google/gemini-flash-1.5",
-    "hotkey": "<ctrl>+<shift>+space",
+    "model": "google/gemini-3.1-flash-lite",
+    "hotkey": "<ctrl>+<shift>+<space>",
     "system_prompt": (
         "You are a precise speech-to-text transcriber. "
         "Transcribe the audio exactly as spoken without adding any introductory or concluding remarks."
     ),
     "audio_duration_limit": 30,
-    "insert_mode": "clipboard"
+    "insert_mode": "typewriter",
+    "transcription_mode": "normal"
 }
 
 class ConfigManager:
@@ -41,7 +42,7 @@ class ConfigManager:
         self.load()
         
         logger.debug("ConfigManager.__init__ exiting successfully")
-
+ 
     def load(self) -> None:
         """Loads configuration from the JSON file, falling back to defaults if missing/invalid."""
         logger.debug("ConfigManager.load entering")
@@ -51,7 +52,7 @@ class ConfigManager:
             self.config_data = DEFAULT_CONFIG.copy()
             self.save()
             return
-
+ 
         try:
             logger.debug(f"Attempting to read config from {self.config_path}")
             with open(self.config_path, "r", encoding="utf-8") as f:
@@ -68,6 +69,16 @@ class ConfigManager:
                     logger.debug(f"Loaded config: {key} = {val}")
                 else:
                     logger.warning(f"Ignored unexpected config key: {key}")
+            
+            # Upgrade deprecated default model to the new working model
+            if self.config_data.get("model") == "google/gemini-flash-1.5":
+                logger.info("Upgrading deprecated model google/gemini-flash-1.5 to google/gemini-3.1-flash-lite")
+                self.config_data["model"] = "google/gemini-3.1-flash-lite"
+                # Also upgrade default insert mode for returning users who were on the old default
+                if self.config_data.get("insert_mode") == "clipboard":
+                    logger.info("Upgrading default insert_mode from clipboard to typewriter")
+                    self.config_data["insert_mode"] = "typewriter"
+                self.save()
                     
             logger.info("Configuration successfully loaded from file")
         except Exception as e:
@@ -120,6 +131,10 @@ class ConfigManager:
                 
         if key == "insert_mode" and value not in ("clipboard", "typewriter"):
             logger.error(f"Validation error for {key}: '{value}' is not a valid mode.")
+            return
+
+        if key == "transcription_mode" and value not in ("normal", "clean", "translate"):
+            logger.error(f"Validation error for {key}: '{value}' is not a valid transcription mode.")
             return
 
         self.config_data[key] = value

@@ -70,10 +70,12 @@ def test_app_manager_initialization(tmp_path):
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
         "api_key": "test-api-key",
-        "model": "google/gemini-flash-1.5",
+        "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",
         "audio_duration_limit": 30,
-        "insert_mode": "clipboard"
+        "insert_mode": "clipboard",
+        "transcription_mode": "normal",
+        "system_prompt": "test-prompt"
     }[key]
     
     mock_recorder = MagicMock()
@@ -91,7 +93,7 @@ def test_app_manager_initialization(tmp_path):
         assert manager.recorder == mock_recorder
         assert manager.clipboard == mock_clipboard
         assert manager.transcription_service.api_key == "test-api-key"
-        assert manager.transcription_service.model == "google/gemini-flash-1.5"
+        assert manager.transcription_service.model == "google/gemini-3.1-flash-lite"
         
         mock_hotkey_class.assert_called_once()
         assert manager.hotkey_listener is not None
@@ -101,10 +103,12 @@ def test_recording_start_and_stop(tmp_path):
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
         "api_key": "test-api-key",
-        "model": "google/gemini-flash-1.5",
+        "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",
         "audio_duration_limit": 30,
-        "insert_mode": "clipboard"
+        "insert_mode": "clipboard",
+        "transcription_mode": "clean",
+        "system_prompt": "test-prompt"
     }[key]
     
     mock_recorder = MagicMock()
@@ -145,7 +149,7 @@ def test_recording_start_and_stop(tmp_path):
             mock_recorder.stop_recording.assert_called_once()
             
             # Verify worker initialization
-            mock_worker_class.assert_called_once_with(manager.transcription_service, b"wav audio bytes")
+            mock_worker_class.assert_called_once_with(manager.transcription_service, b"wav audio bytes", mode="clean")
             mock_worker.start.assert_called_once()
 
 def test_hotkey_toggle_behavior(tmp_path):
@@ -153,10 +157,12 @@ def test_hotkey_toggle_behavior(tmp_path):
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
         "api_key": "test-api-key",
-        "model": "google/gemini-flash-1.5",
+        "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",
         "audio_duration_limit": 30,
-        "insert_mode": "clipboard"
+        "insert_mode": "clipboard",
+        "transcription_mode": "normal",
+        "system_prompt": "test-prompt"
     }[key]
     
     mock_recorder = MagicMock()
@@ -185,10 +191,12 @@ def test_transcription_success_handling_clipboard(tmp_path):
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
         "api_key": "test-api-key",
-        "model": "google/gemini-flash-1.5",
+        "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",
         "audio_duration_limit": 30,
-        "insert_mode": "clipboard"
+        "insert_mode": "clipboard",
+        "transcription_mode": "normal",
+        "system_prompt": "test-prompt"
     }[key]
     
     mock_recorder = MagicMock()
@@ -214,10 +222,12 @@ def test_transcription_success_handling_typewriter(tmp_path):
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
         "api_key": "test-api-key",
-        "model": "google/gemini-flash-1.5",
+        "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",
         "audio_duration_limit": 30,
-        "insert_mode": "typewriter"
+        "insert_mode": "typewriter",
+        "transcription_mode": "normal",
+        "system_prompt": "test-prompt"
     }[key]
     
     mock_recorder = MagicMock()
@@ -238,10 +248,12 @@ def test_transcription_error_handling(tmp_path):
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
         "api_key": "test-api-key",
-        "model": "google/gemini-flash-1.5",
+        "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",
         "audio_duration_limit": 30,
-        "insert_mode": "clipboard"
+        "insert_mode": "clipboard",
+        "transcription_mode": "normal",
+        "system_prompt": "test-prompt"
     }[key]
     
     mock_recorder = MagicMock()
@@ -260,3 +272,21 @@ def test_transcription_error_handling(tmp_path):
         assert len(notifications) == 1
         assert notifications[0][0] == "Ошибка транскрипции"
         assert "Connection timed out" in notifications[0][1]
+
+def test_transcription_worker_passes_mode():
+    """Test that TranscriptionWorker initializes and passes the mode parameter to the service."""
+    mock_service = MagicMock()
+    wav_bytes = b"test raw wav bytes"
+    
+    # Test worker with default mode
+    worker_default = TranscriptionWorker(mock_service, wav_bytes)
+    assert worker_default.mode == "normal"
+    worker_default.run()
+    mock_service.transcribe.assert_called_once_with(wav_bytes, "normal")
+    
+    # Test worker with custom mode
+    mock_service.reset_mock()
+    worker_clean = TranscriptionWorker(mock_service, wav_bytes, mode="clean")
+    assert worker_clean.mode == "clean"
+    worker_clean.run()
+    mock_service.transcribe.assert_called_once_with(wav_bytes, "clean")

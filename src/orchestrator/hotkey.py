@@ -14,10 +14,35 @@ class HotkeyListener:
     
     def __init__(self, hotkey_str: str, callback: Callable[[], None]):
         logger.debug("HotkeyListener.__init__ entering")
-        self.hotkey_str = hotkey_str.lower().strip()
         self.callback = callback
         self.listener: Optional[keyboard.GlobalHotKeys] = None
-        logger.debug(f"HotkeyListener initialized for hotkey '{self.hotkey_str}'")
+        
+        # Normalize common user mistakes in hotkeys
+        # pynput expects special keys to be in angle brackets like <space>, <ctrl>, <shift>, etc.
+        raw_str = hotkey_str.lower().strip()
+        parts = raw_str.split('+')
+        for i, part in enumerate(parts):
+            part_stripped = part.strip()
+            if part_stripped == "space":
+                parts[i] = "<space>"
+            elif part_stripped == "ctrl" or part_stripped == "control":
+                parts[i] = "<ctrl>"
+            elif part_stripped == "shift":
+                parts[i] = "<shift>"
+            elif part_stripped == "alt":
+                parts[i] = "<alt>"
+            elif part_stripped in ("cmd", "win", "win_l", "win_r", "command", "super"):
+                parts[i] = "<cmd>"
+            elif part_stripped.startswith("<") and part_stripped.endswith(">"):
+                parts[i] = part_stripped
+            elif len(part_stripped) > 1:
+                # E.g. enter, tab, esc, backspace
+                parts[i] = f"<{part_stripped}>"
+            else:
+                parts[i] = part_stripped
+                
+        self.hotkey_str = "+".join(parts)
+        logger.debug(f"HotkeyListener initialized with normalized hotkey '{self.hotkey_str}' (raw: '{hotkey_str}')")
         logger.debug("HotkeyListener.__init__ exiting successfully")
 
     def start(self) -> None:
