@@ -22,8 +22,41 @@ class SettingsDialog(QDialog):
         logger.debug("SettingsDialog.__init__ entering")
         self.config = config
         
+        self.provider_presets = {
+            "openrouter": [
+                "google/gemini-3.1-flash-lite",
+                "openai/whisper-large-v3",
+                "meta-llama/llama-3-70b-instruct"
+            ],
+            "openai": [
+                "whisper-1"
+            ],
+            "groq": [
+                "whisper-large-v3",
+                "whisper-large-v3-turbo",
+                "distil-whisper-large-v3-en"
+            ]
+        }
+        
+        self.temp_settings = {
+            "openrouter": {
+                "api_key": self.config.get("openrouter_api_key"),
+                "model": self.config.get("openrouter_model")
+            },
+            "openai": {
+                "api_key": self.config.get("openai_api_key"),
+                "model": self.config.get("openai_model")
+            },
+            "groq": {
+                "api_key": self.config.get("groq_api_key"),
+                "model": self.config.get("groq_model")
+            }
+        }
+        
+        self.current_provider = "openrouter"
+        
         self.setWindowTitle("Настройки Transcriber")
-        self.setMinimumSize(480, 480)
+        self.setMinimumSize(480, 520)
         # Ensure it gets deleted when closed to reclaim idle RAM (essential for 40-60MB target)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         
@@ -51,21 +84,26 @@ class SettingsDialog(QDialog):
         form_layout.setContentsMargins(15, 15, 15, 15)
         form_layout.setSpacing(12)
         
+        # 0. API Provider
+        self.provider_combo = QComboBox()
+        self.provider_combo.addItem("OpenRouter", "openrouter")
+        self.provider_combo.addItem("OpenAI", "openai")
+        self.provider_combo.addItem("Groq", "groq")
+        form_layout.addRow(QLabel("Провайдер API:"), self.provider_combo)
+        
         # 1. API Key
+        self.api_key_label = QLabel("API Ключ:")
         self.api_key_input = QLineEdit()
         self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.api_key_input.setPlaceholderText("Вставьте ключ API OpenRouter...")
-        form_layout.addRow(QLabel("API Ключ OpenRouter:"), self.api_key_input)
+        form_layout.addRow(self.api_key_label, self.api_key_input)
         
         # 2. Model dropdown
         self.model_combo = QComboBox()
-        self.model_combo.addItems([
-            "google/gemini-3.1-flash-lite",
-            "openai/whisper-large-v3",
-            "meta-llama/llama-3-70b-instruct"
-        ])
         self.model_combo.setEditable(True)
         form_layout.addRow(QLabel("Модель транскрипции:"), self.model_combo)
+        
+        # Connect provider changed signal
+        self.provider_combo.currentIndexChanged.connect(self.on_provider_changed)
         
         # 3. Hotkey
         self.hotkey_input = QLineEdit()
@@ -118,18 +156,72 @@ class SettingsDialog(QDialog):
         layout.addLayout(button_layout)
         logger.debug("SettingsDialog.setup_ui exiting")
 
-    def load_settings(self):
-        logger.debug("SettingsDialog.load_settings entering")
-        self.api_key_input.setText(self.config.get("api_key"))
+    def on_provider_changed(self):
+        logger.debug("SettingsDialog.on_provider_changed entering")
+        new_provider = self.provider_combo.currentData()
+        
+        # Save current input values to previous provider's temp settings
+        old_provider = getattr(self, "current_provider", None)
+        if old_provider:
+            self.temp_settings[old_provider]["api_key"] = self.api_key_input.text().strip()
+            self.temp_settings[old_provider]["model"] = self.model_combo.currentText().strip()
+            
+        # Update current provider
+        self.current_provider = new_provider
+        
+        # Update API key label and placeholder
+        provider_names = {"openrouter": "OpenRouter", "openai": "OpenAI", "groq": "Groq"}
+        p_name = provider_names.get(new_provider, "API")
+        self.api_key_label.setText(f"API Ключ {p_name}:")
+        self.api_key_input.setPlaceholderText(f"Вставьте ключ API {p_name}...")
+        
+        # Load values from temp settings for the new provider
+        self.api_key_input.setText(self.temp_settings[new_provider]["api_key"])
+        
+        # Update model combo presets
+        self.model_combo.blockSignals(True)
+        self.model_combo.clear()
+        self.model_combo.addItems(self.provider_presets.get(new_provider, []))
+        self.model_combo.blockSignals(False)
         
         # Match model text
-        model = self.config.get("model")
-        idx = self.model_combo.findText(model)
+        model_val = self.temp_settings[new_provider]["model"]
+        idx = self.model_combo.findText(model_val)
         if idx >= 0:
             self.model_combo.setCurrentIndex(idx)
         else:
-            self.model_combo.setEditText(model)
+            self.model_combo.setEditText(model_val)
             
+        logger.debug("SettingsDialog.on_provider_changed exiting")
+
+    def load_settings(self):
+        logger.debug("SettingsDialog.load_settings entering")
+        
+        # Block signals during loading to prevent double triggers
+        self.provider_combo.blockSignals(True)
+        
+        provider = self.config.get("provider") or "openrouter"
+        self.current_provider = provider
+        
+        # Set provider combo index
+        idx = self.provider_combo.findData(provider)
+        if idx >= 0:
+            self.provider_combo.setCurrentIndex(idx)
+            
+        self.provider_combo.blockSignals(False)
+        
+        # Initialize temp settings with latest persistent data from config (just in case)
+        self.temp_settings["openrouter"]["api_key"] = self.config.get("openrouter_api_key")
+        self.temp_settings["openrouter"]["model"] = self.config.get("openrouter_model")
+        self.temp_settings["openai"]["api_key"] = self.config.get("openai_api_key")
+        self.temp_settings["openai"]["model"] = self.config.get("openai_model")
+        self.temp_settings["groq"]["api_key"] = self.config.get("groq_api_key")
+        self.temp_settings["groq"]["model"] = self.config.get("groq_model")
+        
+        # Trigger dynamic update
+        self.on_provider_changed()
+        
+        # Load general configs
         self.hotkey_input.setText(self.config.get("hotkey"))
         self.duration_spin.setValue(self.config.get("audio_duration_limit"))
         
@@ -150,8 +242,12 @@ class SettingsDialog(QDialog):
 
     def save_settings(self):
         logger.debug("SettingsDialog.save_settings entering")
-        api_key = self.api_key_input.text().strip()
-        model = self.model_combo.currentText().strip()
+        
+        # Save current input values to active provider's temp settings
+        active_provider = self.provider_combo.currentData()
+        self.temp_settings[active_provider]["api_key"] = self.api_key_input.text().strip()
+        self.temp_settings[active_provider]["model"] = self.model_combo.currentText().strip()
+        
         hotkey = self.hotkey_input.text().strip()
         duration = self.duration_spin.value()
         insert_mode = self.mode_combo.currentData()
@@ -159,8 +255,16 @@ class SettingsDialog(QDialog):
         prompt = self.prompt_input.toPlainText().strip()
         
         logger.info("Saving settings from configuration dialog UI")
-        self.config.set("api_key", api_key)
-        self.config.set("model", model)
+        
+        # First write individual provider details to the config dictionary
+        for provider, settings in self.temp_settings.items():
+            self.config.set(f"{provider}_api_key", settings["api_key"])
+            self.config.set(f"{provider}_model", settings["model"])
+            
+        # Next, set the active provider
+        self.config.set("provider", active_provider)
+        
+        # Save general fields
         self.config.set("hotkey", hotkey)
         self.config.set("audio_duration_limit", duration)
         self.config.set("insert_mode", insert_mode)

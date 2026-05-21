@@ -69,6 +69,7 @@ def test_app_manager_initialization(tmp_path):
     # Mock config
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
         "api_key": "test-api-key",
         "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",
@@ -77,6 +78,7 @@ def test_app_manager_initialization(tmp_path):
         "transcription_mode": "normal",
         "system_prompt": "test-prompt"
     }[key]
+
     
     mock_recorder = MagicMock()
     mock_clipboard = MagicMock()
@@ -102,6 +104,7 @@ def test_recording_start_and_stop(tmp_path):
     """Test start_recording and stop_recording transitions and calls."""
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
         "api_key": "test-api-key",
         "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",
@@ -156,6 +159,7 @@ def test_hotkey_toggle_behavior(tmp_path):
     """Test that the internal hotkey trigger toggles between start and stop."""
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
         "api_key": "test-api-key",
         "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",
@@ -190,6 +194,7 @@ def test_transcription_success_handling_clipboard(tmp_path):
     """Test handling of successful transcription in clipboard mode."""
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
         "api_key": "test-api-key",
         "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",
@@ -221,6 +226,7 @@ def test_transcription_success_handling_typewriter(tmp_path):
     """Test handling of successful transcription in typewriter mode."""
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
         "api_key": "test-api-key",
         "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",
@@ -247,6 +253,7 @@ def test_transcription_error_handling(tmp_path):
     """Test error handling from the background worker."""
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
         "api_key": "test-api-key",
         "model": "google/gemini-3.1-flash-lite",
         "hotkey": "<ctrl>+<shift>+space",

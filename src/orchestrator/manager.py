@@ -60,11 +60,16 @@ class AppManager(QObject):
         else:
             self.clipboard = clipboard
             
+        provider = self.config.get("provider")
+        chat_model = self.config.get(f"{provider}_chat_model") if provider in ("openai", "groq") else None
         self.transcription_service = TranscriptionService(
             api_key=self.config.get("api_key"),
             model=self.config.get("model"),
-            system_prompt=self.config.get("system_prompt")
+            system_prompt=self.config.get("system_prompt"),
+            provider=provider,
+            chat_model=chat_model
         )
+
         
         self.state = "idle"
         self.hotkey_listener: Optional[HotkeyListener] = None
@@ -138,6 +143,9 @@ class AppManager(QObject):
         try:
             self._set_state("recording")
             # Sync any new settings
+            provider = self.config.get("provider")
+            self.transcription_service.provider = provider
+            self.transcription_service.chat_model = self.config.get(f"{provider}_chat_model") if provider in ("openai", "groq") else None
             self.transcription_service.api_key = self.config.get("api_key")
             self.transcription_service.model = self.config.get("model")
             self.transcription_service.system_prompt = self.config.get("system_prompt")
@@ -245,6 +253,9 @@ class AppManager(QObject):
         # Re-initialize the hotkey listener
         self.setup_hotkey()
         # Update model settings on the transcription service
+        provider = self.config.get("provider")
+        self.transcription_service.provider = provider
+        self.transcription_service.chat_model = self.config.get(f"{provider}_chat_model") if provider in ("openai", "groq") else None
         self.transcription_service.api_key = self.config.get("api_key")
         self.transcription_service.model = self.config.get("model")
         self.transcription_service.system_prompt = self.config.get("system_prompt")

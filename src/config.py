@@ -11,8 +11,15 @@ log_level_env = os.environ.get("LOG_LEVEL", "DEBUG").upper()
 logger.setLevel(getattr(logging, log_level_env, logging.DEBUG))
 
 DEFAULT_CONFIG: Dict[str, Any] = {
-    "api_key": "",
-    "model": "google/gemini-3.1-flash-lite",
+    "provider": "openrouter",
+    "openrouter_api_key": "",
+    "openrouter_model": "google/gemini-3.1-flash-lite",
+    "openai_api_key": "",
+    "openai_model": "whisper-1",
+    "openai_chat_model": "gpt-4o-mini",
+    "groq_api_key": "",
+    "groq_model": "whisper-large-v3",
+    "groq_chat_model": "llama3-8b-8192",
     "hotkey": "<ctrl>+<shift>+<space>",
     "system_prompt": (
         "You are a precise speech-to-text transcriber. "
@@ -61,6 +68,12 @@ class ConfigManager:
             if not isinstance(loaded_data, dict):
                 raise ValueError("Config root must be a JSON object")
                 
+            # Smart migration for old schema:
+            # If the loaded data has old 'api_key' or 'model' but no 'provider', migrate them to openrouter.
+            legacy_api_key = loaded_data.get("api_key")
+            legacy_model = loaded_data.get("model")
+            has_provider = "provider" in loaded_data
+            
             # Fill missing keys with defaults to ensure schema compatibility
             self.config_data = DEFAULT_CONFIG.copy()
             for key, val in loaded_data.items():
@@ -70,14 +83,31 @@ class ConfigManager:
                 else:
                     logger.warning(f"Ignored unexpected config key: {key}")
             
-            # Upgrade deprecated default model to the new working model
-            if self.config_data.get("model") == "google/gemini-flash-1.5":
+            # Apply migration if needed
+            if not has_provider:
+                logger.info("Migrating legacy config schema to multi-provider schema")
+                if legacy_api_key is not None:
+                    self.config_data["openrouter_api_key"] = legacy_api_key
+                    logger.info("Migrated legacy API key to openrouter_api_key")
+                if legacy_model is not None:
+                    # Deprecated model upgrade check
+                    if legacy_model == "google/gemini-flash-1.5":
+                        legacy_model = "google/gemini-3.1-flash-lite"
+                    self.config_data["openrouter_model"] = legacy_model
+                    logger.info(f"Migrated legacy model to openrouter_model: {legacy_model}")
+                self.config_data["provider"] = "openrouter"
+                self.save()
+            
+            # Upgrade deprecated default model to the new working model (independent of schema migration)
+            if self.config_data.get("openrouter_model") == "google/gemini-flash-1.5":
                 logger.info("Upgrading deprecated model google/gemini-flash-1.5 to google/gemini-3.1-flash-lite")
-                self.config_data["model"] = "google/gemini-3.1-flash-lite"
-                # Also upgrade default insert mode for returning users who were on the old default
-                if self.config_data.get("insert_mode") == "clipboard":
-                    logger.info("Upgrading default insert_mode from clipboard to typewriter")
-                    self.config_data["insert_mode"] = "typewriter"
+                self.config_data["openrouter_model"] = "google/gemini-3.1-flash-lite"
+                self.save()
+                
+            if self.config_data.get("insert_mode") == "clipboard" and not has_provider:
+                # Upgrade default insert mode for returning users who were on the old default
+                logger.info("Upgrading default insert_mode from clipboard to typewriter")
+                self.config_data["insert_mode"] = "typewriter"
                 self.save()
                     
             logger.info("Configuration successfully loaded from file")
@@ -106,16 +136,31 @@ class ConfigManager:
         logger.debug("ConfigManager.save exiting")
 
     def get(self, key: str) -> Any:
-        """Retrieves a configuration value."""
+        """Retrieves a configuration value, dynamically mapping legacy API keys/models to the active provider."""
         logger.debug(f"ConfigManager.get entering for key: {key}")
-        val = self.config_data.get(key, DEFAULT_CONFIG.get(key))
+        if key == "api_key":
+            provider = self.config_data.get("provider", "openrouter")
+            val = self.config_data.get(f"{provider}_api_key", "")
+        elif key == "model":
+            provider = self.config_data.get("provider", "openrouter")
+            val = self.config_data.get(f"{provider}_model", "")
+        else:
+            val = self.config_data.get(key, DEFAULT_CONFIG.get(key))
         logger.debug(f"ConfigManager.get exiting for key: {key} returning: {val}")
         return val
 
     def set(self, key: str, value: Any) -> None:
-        """Sets a configuration value and triggers a save."""
+        """Sets a configuration value and triggers a save, mapping legacy key/model to the active provider."""
         logger.debug(f"ConfigManager.set entering for key: {key}, value: {value}")
         
+        # Intercept legacy/dynamic keys and redirect to active provider
+        if key == "api_key":
+            provider = self.config_data.get("provider", "openrouter")
+            key = f"{provider}_api_key"
+        elif key == "model":
+            provider = self.config_data.get("provider", "openrouter")
+            key = f"{provider}_model"
+
         if key not in DEFAULT_CONFIG:
             logger.warning(f"Attempted to set custom/invalid configuration key: {key}")
             

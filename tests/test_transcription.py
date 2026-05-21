@@ -191,3 +191,179 @@ def test_transcribe_invalid_mode():
     service = TranscriptionService(api_key="valid-test-key", model="google/gemini-3.1-flash-lite")
     with pytest.raises(ValueError, match="Invalid transcription mode"):
         service.transcribe(b"RIFF....WAVEfmt...data...", mode="invalid")
+
+def test_transcribe_success_openai_normal():
+    """Test standard normal transcription with OpenAI (multipart Whisper)."""
+    service = TranscriptionService(api_key="openai-test-key", model="whisper-1", provider="openai")
+    dummy_wav_bytes = b"RIFF....WAVEfmt...data..."
+    
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"text": "hello from openai whisper"}
+    
+    with patch("requests.post", return_value=mock_response) as mock_post:
+        result = service.transcribe(dummy_wav_bytes, mode="normal")
+        
+        assert result == "hello from openai whisper"
+        mock_post.assert_called_once()
+        args, kwargs = mock_post.call_args
+        assert args[0] == "https://api.openai.com/v1/audio/transcriptions"
+        assert kwargs["headers"]["Authorization"] == "Bearer openai-test-key"
+        assert kwargs["data"]["model"] == "whisper-1"
+        assert "file" in kwargs["files"]
+        assert kwargs["files"]["file"][0] == "audio.wav"
+        assert kwargs["files"]["file"][1] == dummy_wav_bytes
+        assert kwargs["files"]["file"][2] == "audio/wav"
+
+def test_transcribe_success_groq_normal():
+    """Test standard normal transcription with Groq (multipart Whisper)."""
+    service = TranscriptionService(api_key="groq-test-key", model="whisper-large-v3", provider="groq")
+    dummy_wav_bytes = b"RIFF....WAVEfmt...data..."
+    
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"text": "hello from groq whisper"}
+    
+    with patch("requests.post", return_value=mock_response) as mock_post:
+        result = service.transcribe(dummy_wav_bytes, mode="normal")
+        
+        assert result == "hello from groq whisper"
+        mock_post.assert_called_once()
+        args, kwargs = mock_post.call_args
+        assert args[0] == "https://api.groq.com/openai/v1/audio/transcriptions"
+        assert kwargs["headers"]["Authorization"] == "Bearer groq-test-key"
+        assert kwargs["data"]["model"] == "whisper-large-v3"
+        assert "file" in kwargs["files"]
+
+def test_transcribe_openai_clean_mode_pipeline():
+    """Test the two-step clean mode pipeline on OpenAI (Whisper + Chat Completion)."""
+    service = TranscriptionService(
+        api_key="openai-test-key", 
+        model="whisper-1", 
+        provider="openai", 
+        chat_model="gpt-4o-mini"
+    )
+    dummy_wav_bytes = b"RIFF....WAVEfmt...data..."
+    
+    # Mock responses for the two steps
+    mock_stt_response = MagicMock()
+    mock_stt_response.status_code = 200
+    mock_stt_response.json.return_value = {"text": "привет привет э-э"}
+    
+    mock_chat_response = MagicMock()
+    mock_chat_response.status_code = 200
+    mock_chat_response.json.return_value = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "Привет"
+                }
+            }
+        ]
+    }
+    
+    def side_effect(url, *args, **kwargs):
+        if "audio/transcriptions" in url:
+            return mock_stt_response
+        elif "chat/completions" in url:
+            return mock_chat_response
+        raise ValueError(f"Unexpected URL: {url}")
+        
+    with patch("requests.post", side_effect=side_effect) as mock_post:
+        result = service.transcribe(dummy_wav_bytes, mode="clean")
+        
+        assert result == "Привет"
+        assert mock_post.call_count == 2
+        
+        # Verify first call (STT)
+        first_call = mock_post.call_args_list[0]
+        assert first_call[0][0] == "https://api.openai.com/v1/audio/transcriptions"
+        
+        # Verify second call (Chat Completion cleanup)
+        second_call = mock_post.call_args_list[1]
+        assert second_call[0][0] == "https://api.openai.com/v1/chat/completions"
+        assert second_call[1]["json"]["model"] == "gpt-4o-mini"
+        assert second_call[1]["json"]["messages"][1]["content"] == "привет привет э-э"
+        assert "clean up the provided text" in second_call[1]["json"]["messages"][0]["content"]
+
+def test_transcribe_groq_translate_mode_pipeline():
+    """Test the two-step translate mode pipeline on Groq (Whisper + Chat Completion)."""
+    service = TranscriptionService(
+        api_key="groq-test-key", 
+        model="whisper-large-v3", 
+        provider="groq", 
+        chat_model="llama3-8b-8192"
+    )
+    dummy_wav_bytes = b"RIFF....WAVEfmt...data..."
+    
+    # Mock responses for the two steps
+    mock_stt_response = MagicMock()
+    mock_stt_response.status_code = 200
+    mock_stt_response.json.return_value = {"text": "привет"}
+    
+    mock_chat_response = MagicMock()
+    mock_chat_response.status_code = 200
+    mock_chat_response.json.return_value = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "Hello"
+                }
+            }
+        ]
+    }
+    
+    def side_effect(url, *args, **kwargs):
+        if "audio/transcriptions" in url:
+            return mock_stt_response
+        elif "chat/completions" in url:
+            return mock_chat_response
+        raise ValueError(f"Unexpected URL: {url}")
+        
+    with patch("requests.post", side_effect=side_effect) as mock_post:
+        result = service.transcribe(dummy_wav_bytes, mode="translate")
+        
+        assert result == "Hello"
+        assert mock_post.call_count == 2
+        
+        # Verify first call
+        first_call = mock_post.call_args_list[0]
+        assert first_call[0][0] == "https://api.groq.com/openai/v1/audio/transcriptions"
+        
+        # Verify second call
+        second_call = mock_post.call_args_list[1]
+        assert second_call[0][0] == "https://api.groq.com/openai/v1/chat/completions"
+        assert second_call[1]["json"]["model"] == "llama3-8b-8192"
+        assert second_call[1]["json"]["messages"][1]["content"] == "привет"
+        assert "translate it into natural, fluent English" in second_call[1]["json"]["messages"][0]["content"]
+
+def test_transcribe_pipeline_chat_failure_fallback():
+    """Test that if the second chat completion step fails, we gracefully fall back to raw transcription."""
+    service = TranscriptionService(
+        api_key="openai-test-key", 
+        model="whisper-1", 
+        provider="openai", 
+        chat_model="gpt-4o-mini"
+    )
+    dummy_wav_bytes = b"RIFF....WAVEfmt...data..."
+    
+    mock_stt_response = MagicMock()
+    mock_stt_response.status_code = 200
+    mock_stt_response.json.return_value = {"text": "raw transcription"}
+    
+    def side_effect(url, *args, **kwargs):
+        if "audio/transcriptions" in url:
+            return mock_stt_response
+        elif "chat/completions" in url:
+            raise requests.RequestException("Chat completion service down")
+        raise ValueError(f"Unexpected URL: {url}")
+        
+    with patch("requests.post", side_effect=side_effect) as mock_post:
+        result = service.transcribe(dummy_wav_bytes, mode="clean")
+        
+        # Should gracefully return raw transcript
+        assert result == "raw transcription"
+        assert mock_post.call_count == 2
+

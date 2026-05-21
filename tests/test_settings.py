@@ -48,19 +48,26 @@ def test_settings_dialog_initialization():
     """Test dialog initialization and default attributes."""
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
         "api_key": "dummy-key",
         "model": "google/gemini-3.1-flash-lite",
+        "openrouter_api_key": "dummy-key",
+        "openrouter_model": "google/gemini-3.1-flash-lite",
+        "openai_api_key": "openai-key",
+        "openai_model": "whisper-1",
+        "groq_api_key": "groq-key",
+        "groq_model": "whisper-large-v3",
         "hotkey": "<ctrl>+<shift>+space",
         "audio_duration_limit": 30,
         "insert_mode": "clipboard",
         "transcription_mode": "normal",
         "system_prompt": "transcribe precisely"
-    }[key]
+    }.get(key, "")
     
     # Patch all QtWidgets elements inside setup_ui to inspect initialization
     with patch("src.ui.settings.QVBoxLayout"), \
          patch("src.ui.settings.QHBoxLayout"), \
-         patch("src.ui.settings.QLabel"), \
+         patch("src.ui.settings.QLabel") as mock_qlabel, \
          patch("src.ui.settings.QLineEdit") as mock_lineedit, \
          patch("src.ui.settings.QTextEdit") as mock_textedit, \
          patch("src.ui.settings.QSpinBox") as mock_spinbox, \
@@ -72,28 +79,96 @@ def test_settings_dialog_initialization():
         # Configure QComboBox mock to return valid integer indices for findText and findData
         mock_combobox.return_value.findText.return_value = 0
         mock_combobox.return_value.findData.return_value = 0
+        mock_combobox.return_value.currentData.return_value = "openrouter"
+        mock_combobox.return_value.currentText.return_value = "google/gemini-3.1-flash-lite"
         
         dialog = SettingsDialog(config=mock_config)
         
         # Verify basic parameters
         assert dialog.title == "Настройки Transcriber"
         assert dialog.min_w == 480
-        assert dialog.min_h == 480
+        assert dialog.min_h == 520
         assert dialog._attributes["WA_DeleteOnClose"] == True
         assert len(dialog._stylesheet) > 0
+
+def test_settings_dialog_provider_switching():
+    """Test switching between providers in the Settings dialog."""
+    mock_config = MagicMock()
+    mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
+        "openrouter_api_key": "or-key",
+        "openrouter_model": "google/gemini-3.1-flash-lite",
+        "openai_api_key": "oa-key",
+        "openai_model": "whisper-1",
+        "groq_api_key": "g-key",
+        "groq_model": "whisper-large-v3"
+    }.get(key, "")
+
+    with patch("src.ui.settings.QVBoxLayout"), \
+         patch("src.ui.settings.QHBoxLayout"), \
+         patch("src.ui.settings.QLabel"), \
+         patch("src.ui.settings.QLineEdit") as mock_lineedit, \
+         patch("src.ui.settings.QTextEdit") as mock_textedit, \
+         patch("src.ui.settings.QSpinBox") as mock_spinbox, \
+         patch("src.ui.settings.QComboBox") as mock_combobox, \
+         patch("src.ui.settings.QPushButton"), \
+         patch("src.ui.settings.QFormLayout"), \
+         patch("src.ui.settings.QGroupBox"):
+
+        mock_combobox.return_value.findText.return_value = -1
+        mock_combobox.return_value.findData.return_value = -1
+        mock_combobox.return_value.currentData.return_value = "openrouter"
+        mock_combobox.return_value.currentText.return_value = "google/gemini-3.1-flash-lite"
+
+        dialog = SettingsDialog(config=mock_config)
+
+        # Mock the interactive GUI elements to inspect changes
+        mock_api_key_label = MagicMock()
+        mock_api_key_input = MagicMock()
+        mock_model_combo = MagicMock()
+        mock_model_combo.findText.return_value = -1
+        mock_provider_combo = MagicMock()
+
+        dialog.api_key_label = mock_api_key_label
+        dialog.api_key_input = mock_api_key_input
+        dialog.model_combo = mock_model_combo
+        dialog.provider_combo = mock_provider_combo
+
+        # 1. Switch to OpenAI
+        mock_provider_combo.currentData.return_value = "openai"
+        mock_api_key_input.text.return_value = "typed-or-key"
+        mock_model_combo.currentText.return_value = "google/gemini-3.1-flash-lite"
+
+
+        dialog.on_provider_changed()
+
+        # Check that old provider values were temporarily cached
+        assert dialog.temp_settings["openrouter"]["api_key"] == "typed-or-key"
+        assert dialog.temp_settings["openrouter"]["model"] == "google/gemini-3.1-flash-lite"
+
+        # Verify UI updates for new provider (OpenAI)
+        mock_api_key_label.setText.assert_called_with("API Ключ OpenAI:")
+        mock_api_key_input.setPlaceholderText.assert_called_with("Вставьте ключ API OpenAI...")
+        mock_api_key_input.setText.assert_called_with("oa-key")
+        mock_model_combo.clear.assert_called()
 
 def test_settings_dialog_save():
     """Test saving settings from UI fields back to ConfigManager."""
     mock_config = MagicMock()
     mock_config.get.side_effect = lambda key: {
-        "api_key": "dummy-key",
-        "model": "google/gemini-3.1-flash-lite",
+        "provider": "openrouter",
+        "openrouter_api_key": "dummy-key",
+        "openrouter_model": "google/gemini-3.1-flash-lite",
+        "openai_api_key": "",
+        "openai_model": "whisper-1",
+        "groq_api_key": "",
+        "groq_model": "whisper-large-v3",
         "hotkey": "<ctrl>+<shift>+space",
         "audio_duration_limit": 30,
         "insert_mode": "clipboard",
         "transcription_mode": "normal",
         "system_prompt": "transcribe precisely"
-    }[key]
+    }.get(key, "")
     
     with patch("src.ui.settings.QVBoxLayout"), \
          patch("src.ui.settings.QHBoxLayout"), \
@@ -109,6 +184,8 @@ def test_settings_dialog_save():
         # Configure QComboBox mock to return valid integer indices for findText and findData
         mock_combobox.return_value.findText.return_value = 0
         mock_combobox.return_value.findData.return_value = 0
+        mock_combobox.return_value.currentData.return_value = "openrouter"
+        mock_combobox.return_value.currentText.return_value = "google/gemini-3.1-flash-lite"
         
         # Set up mock UI elements
         mock_api_key_input = MagicMock()
@@ -116,6 +193,9 @@ def test_settings_dialog_save():
         
         mock_model_combo = MagicMock()
         mock_model_combo.currentText.return_value = " new-model "
+        
+        mock_provider_combo = MagicMock()
+        mock_provider_combo.currentData.return_value = "openai"
         
         mock_hotkey_input = MagicMock()
         mock_hotkey_input.text.return_value = " <ctrl>+<shift>+z "
@@ -137,6 +217,7 @@ def test_settings_dialog_save():
         # Override constructed properties with our mock controls
         dialog.api_key_input = mock_api_key_input
         dialog.model_combo = mock_model_combo
+        dialog.provider_combo = mock_provider_combo
         dialog.hotkey_input = mock_hotkey_input
         dialog.duration_spin = mock_duration_spin
         dialog.mode_combo = mock_mode_combo
@@ -147,8 +228,9 @@ def test_settings_dialog_save():
         dialog.save_settings()
         
         # Verify config update calls
-        mock_config.set.assert_any_call("api_key", "new-api-key")
-        mock_config.set.assert_any_call("model", "new-model")
+        mock_config.set.assert_any_call("provider", "openai")
+        mock_config.set.assert_any_call("openai_api_key", "new-api-key")
+        mock_config.set.assert_any_call("openai_model", "new-model")
         mock_config.set.assert_any_call("hotkey", "<ctrl>+<shift>+z")
         mock_config.set.assert_any_call("audio_duration_limit", 60)
         mock_config.set.assert_any_call("insert_mode", "typewriter")
@@ -156,3 +238,5 @@ def test_settings_dialog_save():
         mock_config.set.assert_any_call("system_prompt", "new prompt")
         
         assert dialog._accepted == True
+
+
