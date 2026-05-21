@@ -22,6 +22,12 @@ class AudioRecorder:
         self.stream: Optional[sd.InputStream] = None
         self.audio_buffers = []
         self.is_recording = False
+        
+        # Silence Detection & Auto-Slicing parameters
+        self.silence_threshold = 0.015
+        self.silence_timer_seconds = 0.0
+        self.silence_detected_callback = None
+        
         logger.debug(f"AudioRecorder initialized with sample_rate={self.sample_rate}, channels={self.channels}")
         logger.debug("AudioRecorder.__init__ exiting successfully")
 
@@ -32,16 +38,47 @@ class AudioRecorder:
         if self.is_recording:
             # Append a copy of the input data block to avoid issues with buffer overwriting
             self.audio_buffers.append(indata.copy())
+            
+            # Continuous Silence Detection & Auto-Slicing
+            if getattr(self, "silence_detection_enabled", False) and self.silence_detected_callback:
+                if indata.size > 0:
+                    rms = np.sqrt(np.mean(indata**2))
+                else:
+                    rms = 0.0
+                
+                block_duration = frames / self.sample_rate
+                if rms < self.silence_threshold:
+                    self.silence_timer_seconds += block_duration
+                    if self.silence_timer_seconds >= 1.0 and self.audio_buffers:
+                        # Slice segment (concatenate all buffers up to now)
+                        logger.debug("Silence threshold reached 1.0s. Slicing audio segment.")
+                        recording_data = np.concatenate(self.audio_buffers, axis=0)
+                        
+                        # Clear buffer seamlessly
+                        self.audio_buffers = []
+                        self.silence_timer_seconds = 0.0
+                        
+                        # Convert to WAV and trigger callback
+                        try:
+                            wav_bytes = self.convert_to_wav(recording_data)
+                            if len(wav_bytes) > 0:
+                                self.silence_detected_callback(wav_bytes)
+                        except Exception as e:
+                            logger.error(f"Error in silence detected callback processing: {e}", exc_info=True)
+                else:
+                    self.silence_timer_seconds = 0.0
 
-    def start_recording(self) -> None:
+    def start_recording(self, silence_detection_enabled: bool = False) -> None:
         """Starts the audio recording session."""
-        logger.debug("AudioRecorder.start_recording entering")
+        logger.debug(f"AudioRecorder.start_recording entering, silence_detection_enabled={silence_detection_enabled}")
         if self.is_recording:
             logger.warning("Recording is already in progress")
             return
             
         self.audio_buffers = []
         self.is_recording = True
+        self.silence_detection_enabled = silence_detection_enabled
+        self.silence_timer_seconds = 0.0
         
         try:
             logger.debug("Initializing sounddevice InputStream")

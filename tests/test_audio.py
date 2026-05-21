@@ -96,3 +96,56 @@ def test_convert_to_wav():
         assert wav_file.getsampwidth() == 2  # 16-bit
         assert wav_file.getframerate() == 8000
         assert wav_file.getnframes() == 3
+
+def test_silence_detection_disabled():
+    """Verify that when silence detection is disabled, even a long pause does not trigger slicing."""
+    recorder = AudioRecorder(sample_rate=16000, channels=1)
+    callback_mock = MagicMock()
+    recorder.silence_detected_callback = callback_mock
+    recorder.silence_threshold = 0.015
+    
+    recorder.start_recording(silence_detection_enabled=False)
+    
+    # 1.0s of silence (16000 samples)
+    silent_data = np.zeros((16000, 1), dtype=np.float32)
+    recorder._callback(silent_data, len(silent_data), {}, None)
+    
+    assert callback_mock.call_count == 0
+    assert len(recorder.audio_buffers) == 1  # Still accumulated in main buffer
+
+def test_silence_detection_slicing():
+    """Verify that silence detection correctly slices and resets buffer on 1s of silence."""
+    recorder = AudioRecorder(sample_rate=16000, channels=1)
+    callback_mock = MagicMock()
+    recorder.silence_detected_callback = callback_mock
+    recorder.silence_threshold = 0.015
+    
+    recorder.start_recording(silence_detection_enabled=True)
+    
+    # 1. Provide active audio (RMS high) - should not trigger silence timer
+    loud_data = np.ones((8000, 1), dtype=np.float32) * 0.1  # RMS > 0.015
+    recorder._callback(loud_data, len(loud_data), {}, None)
+    assert recorder.silence_timer_seconds == 0.0
+    assert len(recorder.audio_buffers) == 1
+    assert callback_mock.call_count == 0
+    
+    # 2. Provide 0.5 seconds of silence (8000 samples at 16000Hz)
+    silent_data_1 = np.zeros((8000, 1), dtype=np.float32)
+    recorder._callback(silent_data_1, len(silent_data_1), {}, None)
+    assert recorder.silence_timer_seconds == 0.5
+    assert len(recorder.audio_buffers) == 2
+    assert callback_mock.call_count == 0
+    
+    # 3. Provide another 0.5 seconds of silence to cross the 1.0s mark
+    silent_data_2 = np.zeros((8000, 1), dtype=np.float32)
+    recorder._callback(silent_data_2, len(silent_data_2), {}, None)
+    
+    # The 1.0s silence should trigger a slice, clear the buffer, and call the callback
+    assert recorder.silence_timer_seconds == 0.0
+    assert len(recorder.audio_buffers) == 0  # Buffer cleared seamlessly
+    assert callback_mock.call_count == 1
+    
+    # The callback should receive valid WAV bytes
+    captured_wav = callback_mock.call_args[0][0]
+    assert captured_wav.startswith(b"RIFF")
+

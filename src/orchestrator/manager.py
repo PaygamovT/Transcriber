@@ -43,6 +43,7 @@ class AppManager(QObject):
     state_changed = pyqtSignal(str)  # Emitted when state changes ("idle", "recording", "transcribing")
     notification_requested = pyqtSignal(str, str)  # Title, Message (for tray notifications)
     hotkey_triggered = pyqtSignal()  # Internal signal used to marshal pynput thread trigger to GUI thread
+    segment_captured = pyqtSignal(bytes)  # Emitted thread-safely when a silent slice is captured
 
     def __init__(self, 
                  config: ConfigManager, 
@@ -82,6 +83,13 @@ class AppManager(QObject):
         
         # Connect signals for thread-safe cross-thread UI marshaling
         self.hotkey_triggered.connect(self._handle_hotkey_trigger)
+        self.segment_captured.connect(self._handle_segment_captured)
+        
+        # Active segment workers set to prevent garbage collection
+        self.active_segment_workers = set()
+        
+        # Wire recorder silence detection callback
+        self.recorder.silence_detected_callback = self._on_recorder_silence
         
         # Initialize and start global hotkey
         self.setup_hotkey()
@@ -150,8 +158,15 @@ class AppManager(QObject):
             self.transcription_service.model = self.config.get("model")
             self.transcription_service.system_prompt = self.config.get("system_prompt")
             
-            logger.debug("Starting recorder")
-            self.recorder.start_recording()
+            # Reset active segment workers
+            self.active_segment_workers.clear()
+            
+            # Enable silence detection strictly in normal transcription mode
+            mode = self.config.get("transcription_mode") or "normal"
+            silence_enabled = (mode == "normal")
+            
+            logger.debug(f"Starting recorder with silence_detection_enabled={silence_enabled}")
+            self.recorder.start_recording(silence_detection_enabled=silence_enabled)
             
             # Start safety limit timer
             limit_s = self.config.get("audio_duration_limit")
@@ -177,16 +192,18 @@ class AppManager(QObject):
             # Stop the safety limit timer
             self.limit_timer.stop()
             
-            self._set_state("transcribing")
             logger.debug("Stopping recorder and retrieving WAV bytes")
             wav_bytes = self.recorder.stop_recording()
             
             if not wav_bytes:
                 logger.warning("No audio data was recorded")
                 self._set_state("idle")
-                self.notification_requested.emit("Предупреждение", "Запись пуста, транскрипция отменена.")
+                mode = self.config.get("transcription_mode") or "normal"
+                if mode != "normal":
+                    self.notification_requested.emit("Предупреждение", "Запись пуста, транскрипция отменена.")
                 return
                 
+            self._set_state("transcribing")
             logger.info("Initializing TranscriptionWorker background thread")
             mode = self.config.get("transcription_mode") or "normal"
             logger.info(f"Retrieved transcription mode: {mode}")
@@ -245,6 +262,75 @@ class AppManager(QObject):
         self.notification_requested.emit("Ошибка транскрипции", f"Не удалось распознать аудио: {error_msg}")
         logger.debug("AppManager._handle_transcription_error exiting")
 
+    def _on_recorder_silence(self, wav_bytes: bytes) -> None:
+        """Callback from sounddevice InputStream thread when silence is detected."""
+        logger.debug("Recorder detected silence segment, emitting segment_captured signal")
+        self.segment_captured.emit(wav_bytes)
+
+    def _handle_segment_captured(self, wav_bytes: bytes) -> None:
+        """Handles a captured silence segment on the main thread."""
+        logger.debug(f"AppManager._handle_segment_captured entering. Current state: {self.state}")
+        
+        # Only process segment transcription if we are in normal transcription mode AND state is recording
+        mode = self.config.get("transcription_mode") or "normal"
+        if mode != "normal" or self.state != "recording":
+            logger.warning(f"Segment ignored: mode={mode}, state={self.state}")
+            return
+            
+        logger.info("Initializing parallel TranscriptionWorker for segment")
+        worker = TranscriptionWorker(self.transcription_service, wav_bytes, mode=mode)
+        
+        # Track worker to avoid garbage collection
+        self.active_segment_workers.add(worker)
+        
+        # Connect signals
+        worker.finished.connect(lambda text, w=worker: self._handle_segment_success(text, w))
+        worker.error.connect(lambda error_msg, w=worker: self._handle_segment_error(error_msg, w))
+        
+        worker.start()
+        logger.info(f"Parallel TranscriptionWorker started for segment. Active segment workers: {len(self.active_segment_workers)}")
+
+    def _handle_segment_success(self, text: str, worker: TranscriptionWorker) -> None:
+        """Processes successfully transcribed segment text."""
+        logger.debug("AppManager._handle_segment_success entering")
+        if worker in self.active_segment_workers:
+            self.active_segment_workers.remove(worker)
+            
+        cleaned_text = text.strip()
+        if not cleaned_text:
+            logger.info("Segment transcription returned empty text")
+            return
+            
+        logger.info(f"Segment transcription successful. Text: {cleaned_text}")
+        
+        insert_mode = self.config.get("insert_mode")
+        try:
+            if insert_mode == "clipboard":
+                logger.debug("Copying segment text to clipboard")
+                self.clipboard.copy_to_clipboard(cleaned_text)
+                self.notification_requested.emit("Транскрипция", "Сегмент скопирован в буфер обмена!")
+            elif insert_mode == "typewriter":
+                logger.debug("Typing segment text via keyboard emulation")
+                self.clipboard.type_text(cleaned_text)
+                logger.info("Segment text successfully typed")
+            else:
+                logger.warning(f"Unknown insert mode: {insert_mode}")
+        except Exception as e:
+            logger.error(f"Failed to output segment text: {e}", exc_info=True)
+            self.notification_requested.emit("Ошибка вывода сегмента", f"Не удалось вывести сегмент: {e}")
+            
+        logger.debug("AppManager._handle_segment_success exiting")
+
+    def _handle_segment_error(self, error_msg: str, worker: TranscriptionWorker) -> None:
+        """Processes failed segment transcription."""
+        logger.debug("AppManager._handle_segment_error entering")
+        if worker in self.active_segment_workers:
+            self.active_segment_workers.remove(worker)
+            
+        logger.error(f"Segment transcription failed: {error_msg}")
+        self.notification_requested.emit("Ошибка сегмента", f"Не удалось распознать сегмент: {error_msg}")
+        logger.debug("AppManager._handle_segment_error exiting")
+
     def reload_configuration(self) -> None:
         """Reloads the active configuration and updates services."""
         logger.info("Reloading configuration and resetting services")
@@ -280,6 +366,13 @@ class AppManager(QObject):
             except Exception as e:
                 logger.error(f"Error stopping recorder during shutdown: {e}")
                 
+        # Clean up any active segment workers
+        for worker in list(self.active_segment_workers):
+            if worker.isRunning():
+                worker.terminate()
+                worker.wait()
+        self.active_segment_workers.clear()
+        
         if self.worker and self.worker.isRunning():
             logger.info("Waiting for transcription worker to finish")
             self.worker.terminate()

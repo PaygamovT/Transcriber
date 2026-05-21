@@ -297,3 +297,163 @@ def test_transcription_worker_passes_mode():
     assert worker_clean.mode == "clean"
     worker_clean.run()
     mock_service.transcribe.assert_called_once_with(wav_bytes, "clean")
+
+def test_recorder_silence_callback_wiring():
+    """Verify that silence detected callback is wired and emits segment_captured."""
+    mock_config = MagicMock()
+    mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
+        "api_key": "test-key",
+        "model": "gemini-flash",
+        "hotkey": "space",
+        "audio_duration_limit": 10,
+        "insert_mode": "typewriter",
+        "transcription_mode": "normal",
+        "system_prompt": "test-prompt"
+    }[key]
+    mock_recorder = MagicMock()
+    
+    with patch("src.orchestrator.manager.HotkeyListener"):
+        manager = AppManager(config=mock_config, recorder=mock_recorder)
+        
+        # Verify wiring
+        assert manager.recorder.silence_detected_callback == manager._on_recorder_silence
+        
+        # Verify emitting segment_captured
+        captured_signals = []
+        manager.segment_captured.connect(captured_signals.append)
+        
+        test_wav = b"segment wav"
+        manager._on_recorder_silence(test_wav)
+        
+        assert len(captured_signals) == 1
+        assert captured_signals[0] == test_wav
+
+def test_segment_captured_spawns_worker():
+    """Verify that receiving segment_captured spawns parallel worker only in normal mode and recording state."""
+    mock_config = MagicMock()
+    mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
+        "api_key": "test-key",
+        "model": "gemini-flash",
+        "hotkey": "space",
+        "audio_duration_limit": 10,
+        "insert_mode": "typewriter",
+        "transcription_mode": "normal",
+        "system_prompt": "test-prompt"
+    }[key]
+    mock_recorder = MagicMock()
+    
+    with patch("src.orchestrator.manager.HotkeyListener"):
+        manager = AppManager(config=mock_config, recorder=mock_recorder)
+        
+        # Scenario 1: State is not recording (e.g. idle) -> Segment is ignored
+        manager.state = "idle"
+        with patch("src.orchestrator.manager.TranscriptionWorker") as mock_worker_class:
+            manager._handle_segment_captured(b"audio bytes")
+            mock_worker_class.assert_not_called()
+            assert len(manager.active_segment_workers) == 0
+            
+        # Scenario 2: Mode is not normal (e.g. clean) -> Segment is ignored
+        manager.state = "recording"
+        mock_config.get.side_effect = lambda key: {
+            "provider": "openrouter",
+            "api_key": "test-key",
+            "model": "gemini-flash",
+            "hotkey": "space",
+            "audio_duration_limit": 10,
+            "insert_mode": "typewriter",
+            "transcription_mode": "clean",  # clean mode
+            "system_prompt": "test-prompt"
+        }[key]
+        with patch("src.orchestrator.manager.TranscriptionWorker") as mock_worker_class:
+            manager._handle_segment_captured(b"audio bytes")
+            mock_worker_class.assert_not_called()
+            assert len(manager.active_segment_workers) == 0
+            
+        # Scenario 3: State is recording AND mode is normal -> Segment triggers worker
+        mock_config.get.side_effect = lambda key: {
+            "provider": "openrouter",
+            "api_key": "test-key",
+            "model": "gemini-flash",
+            "hotkey": "space",
+            "audio_duration_limit": 10,
+            "insert_mode": "typewriter",
+            "transcription_mode": "normal",  # normal mode
+            "system_prompt": "test-prompt"
+        }[key]
+        
+        with patch("src.orchestrator.manager.TranscriptionWorker") as mock_worker_class:
+            mock_worker = MagicMock()
+            mock_worker_class.return_value = mock_worker
+            
+            manager._handle_segment_captured(b"valid segment wav")
+            
+            mock_worker_class.assert_called_once_with(manager.transcription_service, b"valid segment wav", mode="normal")
+            mock_worker.start.assert_called_once()
+            assert mock_worker in manager.active_segment_workers
+            assert len(manager.active_segment_workers) == 1
+
+def test_segment_success_typing_and_cleanup():
+    """Verify that successful segment transcription types the text and cleans up worker tracker."""
+    mock_config = MagicMock()
+    mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
+        "api_key": "test-key",
+        "model": "gemini-flash",
+        "hotkey": "space",
+        "audio_duration_limit": 10,
+        "insert_mode": "typewriter",
+        "transcription_mode": "normal",
+        "system_prompt": "test-prompt"
+    }[key]
+    mock_recorder = MagicMock()
+    mock_clipboard = MagicMock()
+    
+    with patch("src.orchestrator.manager.HotkeyListener"):
+        manager = AppManager(config=mock_config, recorder=mock_recorder, clipboard=mock_clipboard)
+        
+        mock_worker = MagicMock()
+        manager.active_segment_workers.add(mock_worker)
+        
+        manager._handle_segment_success("  hello typed segment  ", mock_worker)
+        
+        # Verify text is stripped and typed
+        mock_clipboard.type_text.assert_called_once_with("hello typed segment")
+        mock_clipboard.copy_to_clipboard.assert_not_called()
+        
+        # Verify worker is cleaned up
+        assert mock_worker not in manager.active_segment_workers
+        assert len(manager.active_segment_workers) == 0
+
+def test_stop_recording_normal_mode_empty_buffer():
+    """Verify that in normal mode, stopping with empty remaining buffer transitions smoothly without errors."""
+    mock_config = MagicMock()
+    mock_config.get.side_effect = lambda key: {
+        "provider": "openrouter",
+        "api_key": "test-key",
+        "model": "gemini-flash",
+        "hotkey": "space",
+        "audio_duration_limit": 10,
+        "insert_mode": "typewriter",
+        "transcription_mode": "normal",
+        "system_prompt": "test-prompt"
+    }[key]
+    mock_recorder = MagicMock()
+    mock_recorder.stop_recording.return_value = b""  # Empty remaining buffer
+    
+    with patch("src.orchestrator.manager.HotkeyListener"):
+        manager = AppManager(config=mock_config, recorder=mock_recorder)
+        manager.state = "recording"
+        
+        notifications = []
+        manager.notification_requested.connect(lambda title, msg: notifications.append((title, msg)))
+        
+        with patch("src.orchestrator.manager.TranscriptionWorker") as mock_worker_class:
+            manager.stop_recording()
+            
+            assert manager.state == "idle"
+            mock_worker_class.assert_not_called()
+            # No empty buffer warning is emitted in normal mode
+            assert len(notifications) == 0
+
