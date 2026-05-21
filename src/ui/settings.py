@@ -440,18 +440,6 @@ class SettingsDialog(QDialog):
                 background-color: #191B22;
             }
             
-            /* Highlights for active editing fields (matching white boxes in sketch) */
-            QLineEdit#ApiKeyInput, QComboBox#ModelInput {
-                background-color: #FFFFFF;
-                border: 1px solid #E1E1E6;
-                color: #0D0F12;
-            }
-            QLineEdit#ApiKeyInput:focus, QComboBox#ModelInput:focus {
-                border: 2px solid #C084FC;
-                background-color: #FFFFFF;
-                color: #0D0F12;
-            }
-            
             /* API Key Layout Inner Container */
             #ApiKeyContainer {
                 background: transparent;
