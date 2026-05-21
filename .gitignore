@@ -20,3 +20,9 @@ Thumbs.db
 .agents/
 .ai-factory/
 .agent/
+
+# PyInstaller build outputs
+build/
+dist/
+*.spec
+
