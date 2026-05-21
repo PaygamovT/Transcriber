@@ -81,16 +81,14 @@ class ClipboardService:
             logger.warning("Empty text, ignoring typing emulation")
             return
             
-        if self.keyboard is None:
-            logger.error("Keyboard controller is not initialized")
-            raise RuntimeError("Keyboard controller is not available.")
-            
-        logger.info(f"Emulating keyboard typing for '{text[:20]}...' ({len(text)} characters)")
+        logger.info(f"Emulating keyboard typing for '{text[:20]}...' ({len(text)} characters) using keyboard.write")
         try:
-            self.keyboard.type(text)
-            logger.info("Successfully completed keyboard typing emulation")
+            import keyboard
+            # Use keyboard.write for proper Unicode (Russian/Uzbek/English) support
+            keyboard.write(text, delay=0.01)
+            logger.info("Successfully completed keyboard typing emulation using keyboard.write")
         except Exception as e:
-            logger.error(f"Failed keyboard typing emulation: {e}", exc_info=True)
+            logger.error(f"Failed keyboard typing emulation using keyboard.write: {e}", exc_info=True)
             raise
             
         logger.debug("ClipboardService.type_text exiting")

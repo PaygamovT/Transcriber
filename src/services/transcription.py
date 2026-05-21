@@ -205,8 +205,12 @@ class TranscriptionService:
                     )
                 else:  # normal mode using chat completions
                     prompt = self.system_prompt or (
-                        "You are a precise speech-to-text transcriber. "
-                        "Transcribe the audio exactly as spoken without adding any introductory or concluding remarks."
+                        "You are a pure audio transcription tool. Your ONLY task is to transcribe exactly what is spoken in the audio. "
+                        "Do NOT generate new text, do NOT hallucinate, do NOT complete sentences, and do NOT add any extra information. "
+                        "If you hear nothing or only noise, return an empty string. "
+                        "The audio may contain speech in Russian, English, or Uzbek. "
+                        "Return ONLY the transcribed text in its original language, exactly as spoken. "
+                        "No explanations, no translations, no prefixes."
                     )
                 
                 payload = {

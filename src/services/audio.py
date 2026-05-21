@@ -27,10 +27,11 @@ class AudioRecorder:
         self.silence_threshold = 0.015
         self.silence_timer_seconds = 0.0
         self.silence_detected_callback = None
+        self.voice_detected = False
         
         logger.debug(f"AudioRecorder initialized with sample_rate={self.sample_rate}, channels={self.channels}")
         logger.debug("AudioRecorder.__init__ exiting successfully")
-
+ 
     def _callback(self, indata: np.ndarray, frames: int, time_info: dict, status: sd.CallbackFlags) -> None:
         """Callback function called by sounddevice InputStream for each block of audio."""
         if status:
@@ -47,27 +48,34 @@ class AudioRecorder:
                     rms = 0.0
                 
                 block_duration = frames / self.sample_rate
-                if rms < self.silence_threshold:
-                    self.silence_timer_seconds += block_duration
-                    if self.silence_timer_seconds >= 1.0 and self.audio_buffers:
-                        # Slice segment (concatenate all buffers up to now)
-                        logger.debug("Silence threshold reached 1.0s. Slicing audio segment.")
-                        recording_data = np.concatenate(self.audio_buffers, axis=0)
-                        
-                        # Clear buffer seamlessly
-                        self.audio_buffers = []
-                        self.silence_timer_seconds = 0.0
-                        
-                        # Convert to WAV and trigger callback
-                        try:
-                            wav_bytes = self.convert_to_wav(recording_data)
-                            if len(wav_bytes) > 0:
-                                self.silence_detected_callback(wav_bytes)
-                        except Exception as e:
-                            logger.error(f"Error in silence detected callback processing: {e}", exc_info=True)
-                else:
+                if rms >= self.silence_threshold:
+                    self.voice_detected = True
                     self.silence_timer_seconds = 0.0
-
+                else:
+                    self.silence_timer_seconds += block_duration
+                    if self.silence_timer_seconds >= 1.0:
+                        if self.voice_detected and self.audio_buffers:
+                            # Slice segment (concatenate all buffers up to now)
+                            logger.debug("Silence threshold reached 1.0s. Slicing audio segment.")
+                            recording_data = np.concatenate(self.audio_buffers, axis=0)
+                            
+                            # Clear buffer seamlessly
+                            self.audio_buffers = []
+                            self.voice_detected = False
+                            
+                            # Convert to WAV and trigger callback
+                            try:
+                                wav_bytes = self.convert_to_wav(recording_data)
+                                if len(wav_bytes) > 0:
+                                    self.silence_detected_callback(wav_bytes)
+                            except Exception as e:
+                                logger.error(f"Error in silence detected callback processing: {e}", exc_info=True)
+                        else:
+                            # Discard empty silence buffer to prevent memory growth
+                            self.audio_buffers = []
+                            
+                        self.silence_timer_seconds = 0.0
+ 
     def start_recording(self, silence_detection_enabled: bool = False) -> None:
         """Starts the audio recording session."""
         logger.debug(f"AudioRecorder.start_recording entering, silence_detection_enabled={silence_detection_enabled}")
@@ -79,6 +87,7 @@ class AudioRecorder:
         self.is_recording = True
         self.silence_detection_enabled = silence_detection_enabled
         self.silence_timer_seconds = 0.0
+        self.voice_detected = False
         
         try:
             logger.debug("Initializing sounddevice InputStream")

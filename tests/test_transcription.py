@@ -34,7 +34,7 @@ def test_transcribe_success_gemini_normal():
         user_msg = kwargs["json"]["messages"][0]
         assert user_msg["role"] == "user"
         assert user_msg["content"][0]["type"] == "text"
-        assert "precise speech-to-text transcriber" in user_msg["content"][0]["text"]
+        assert "pure audio transcription tool" in user_msg["content"][0]["text"]
         assert user_msg["content"][1]["type"] == "input_audio"
         assert user_msg["content"][1]["input_audio"]["format"] == "wav"
 

@@ -20,29 +20,23 @@ def test_clipboard_copy_empty_text():
     
     mock_callback.assert_not_called()
 
-@patch("src.services.clipboard.Controller")
-def test_typewriter_typing_emulation(mock_controller_class):
-    """Test keyboard typewriter emulation typing logic."""
-    mock_controller = MagicMock()
-    mock_controller_class.return_value = mock_controller
-    
+@patch("keyboard.write")
+def test_typewriter_typing_emulation(mock_keyboard_write):
+    """Test keyboard typewriter emulation typing logic using keyboard.write."""
     service = ClipboardService()
     
     service.type_text("test typing")
     
-    mock_controller.type.assert_called_once_with("test typing")
+    mock_keyboard_write.assert_called_once_with("test typing", delay=0.01)
 
-@patch("src.services.clipboard.Controller")
-def test_typewriter_typing_empty_text(mock_controller_class):
-    """Test that emulating empty typing is ignored."""
-    mock_controller = MagicMock()
-    mock_controller_class.return_value = mock_controller
-    
+@patch("keyboard.write")
+def test_typewriter_typing_empty_text(mock_keyboard_write):
+    """Test that emulating empty typing is ignored and does not call keyboard.write."""
     service = ClipboardService()
     
     service.type_text("")
     
-    mock_controller.type.assert_not_called()
+    mock_keyboard_write.assert_not_called()
 
 def test_clipboard_copy_pyqt_fallback():
     """Test PyQt6 fallback copy behavior when no callback is provided."""
