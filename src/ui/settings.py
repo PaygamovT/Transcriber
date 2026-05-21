@@ -247,9 +247,9 @@ class SettingsDialog(QDialog):
         logger.debug("SettingsDialog.on_provider_changed entering")
         new_provider = self.provider_combo.currentData()
         
-        # Save current input values to previous provider's temp settings
+        # Save current input values to previous provider's temp settings only if provider actually changes
         old_provider = getattr(self, "current_provider", None)
-        if old_provider:
+        if old_provider and old_provider != new_provider:
             self.temp_settings[old_provider]["api_key"] = self.api_key_input.text().strip()
             self.temp_settings[old_provider]["model"] = self.model_combo.currentText().strip()
             
