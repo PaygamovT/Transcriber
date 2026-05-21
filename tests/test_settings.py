@@ -69,8 +69,6 @@ def test_settings_dialog_initialization():
          patch("src.ui.settings.QHBoxLayout"), \
          patch("src.ui.settings.QLabel") as mock_qlabel, \
          patch("src.ui.settings.QLineEdit") as mock_lineedit, \
-         patch("src.ui.settings.QTextEdit") as mock_textedit, \
-         patch("src.ui.settings.QSpinBox") as mock_spinbox, \
          patch("src.ui.settings.QComboBox") as mock_combobox, \
          patch("src.ui.settings.QPushButton"), \
          patch("src.ui.settings.QFormLayout"), \
@@ -108,8 +106,6 @@ def test_settings_dialog_provider_switching():
          patch("src.ui.settings.QHBoxLayout"), \
          patch("src.ui.settings.QLabel"), \
          patch("src.ui.settings.QLineEdit") as mock_lineedit, \
-         patch("src.ui.settings.QTextEdit") as mock_textedit, \
-         patch("src.ui.settings.QSpinBox") as mock_spinbox, \
          patch("src.ui.settings.QComboBox") as mock_combobox, \
          patch("src.ui.settings.QPushButton"), \
          patch("src.ui.settings.QFormLayout"), \
@@ -174,8 +170,6 @@ def test_settings_dialog_save():
          patch("src.ui.settings.QHBoxLayout"), \
          patch("src.ui.settings.QLabel"), \
          patch("src.ui.settings.QLineEdit") as mock_lineedit, \
-         patch("src.ui.settings.QTextEdit") as mock_textedit, \
-         patch("src.ui.settings.QSpinBox") as mock_spinbox, \
          patch("src.ui.settings.QComboBox") as mock_combobox, \
          patch("src.ui.settings.QPushButton"), \
          patch("src.ui.settings.QFormLayout"), \
@@ -200,17 +194,11 @@ def test_settings_dialog_save():
         mock_hotkey_input = MagicMock()
         mock_hotkey_input.text.return_value = " <ctrl>+<shift>+z "
         
-        mock_duration_spin = MagicMock()
-        mock_duration_spin.value.return_value = 60
-        
         mock_mode_combo = MagicMock()
         mock_mode_combo.currentData.return_value = "typewriter"
         
         mock_transcription_mode_combo = MagicMock()
         mock_transcription_mode_combo.currentData.return_value = "clean"
-        
-        mock_prompt_input = MagicMock()
-        mock_prompt_input.toPlainText.return_value = " new prompt "
         
         dialog = SettingsDialog(config=mock_config)
         
@@ -219,10 +207,8 @@ def test_settings_dialog_save():
         dialog.model_combo = mock_model_combo
         dialog.provider_combo = mock_provider_combo
         dialog.hotkey_input = mock_hotkey_input
-        dialog.duration_spin = mock_duration_spin
         dialog.mode_combo = mock_mode_combo
         dialog.transcription_mode_combo = mock_transcription_mode_combo
-        dialog.prompt_input = mock_prompt_input
         
         # Save
         dialog.save_settings()
@@ -232,10 +218,8 @@ def test_settings_dialog_save():
         mock_config.set.assert_any_call("openai_api_key", "new-api-key")
         mock_config.set.assert_any_call("openai_model", "new-model")
         mock_config.set.assert_any_call("hotkey", "<ctrl>+<shift>+z")
-        mock_config.set.assert_any_call("audio_duration_limit", 60)
         mock_config.set.assert_any_call("insert_mode", "typewriter")
         mock_config.set.assert_any_call("transcription_mode", "clean")
-        mock_config.set.assert_any_call("system_prompt", "new prompt")
         
         assert dialog._accepted == True
 

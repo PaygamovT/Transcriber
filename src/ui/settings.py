@@ -179,12 +179,6 @@ class SettingsDialog(QDialog):
         self.hotkey_input.setPlaceholderText("<ctrl>+<shift>+space")
         page_rec_layout.addRow(QLabel("Global Hotkey"), self.hotkey_input)
         
-        # Safety duration limit
-        self.duration_spin = QSpinBox()
-        self.duration_spin.setRange(5, 300)
-        self.duration_spin.setSuffix(" сек")
-        page_rec_layout.addRow(QLabel("Recording Limit"), self.duration_spin)
-        
         # Text Insert Mode
         self.mode_combo = QComboBox()
         self.mode_combo.addItem("Печатать на курсоре (Typewriter)", "typewriter")
@@ -197,12 +191,6 @@ class SettingsDialog(QDialog):
         self.transcription_mode_combo.addItem("Очистка от повторов и пауз (Clean)", "clean")
         self.transcription_mode_combo.addItem("Очистка + Перевод на английский (Translate)", "translate")
         page_rec_layout.addRow(QLabel("Transcription Mode"), self.transcription_mode_combo)
-        
-        # System Prompt
-        self.prompt_input = QTextEdit()
-        self.prompt_input.setTabChangesFocus(True)
-        self.prompt_input.setMaximumHeight(80)
-        page_rec_layout.addRow(QLabel("AI System Prompt"), self.prompt_input)
         
         self.stacked_widget.addWidget(self.page_rec)
         
@@ -318,7 +306,6 @@ class SettingsDialog(QDialog):
         
         # Load general configs
         self.hotkey_input.setText(self.config.get("hotkey"))
-        self.duration_spin.setValue(self.config.get("audio_duration_limit"))
         
         # Match insert_mode data
         mode = self.config.get("insert_mode")
@@ -331,8 +318,6 @@ class SettingsDialog(QDialog):
         idx = self.transcription_mode_combo.findData(trans_mode)
         if idx >= 0:
             self.transcription_mode_combo.setCurrentIndex(idx)
-            
-        self.prompt_input.setPlainText(self.config.get("system_prompt"))
         logger.debug("SettingsDialog.load_settings exiting")
 
     def save_settings(self):
@@ -344,10 +329,8 @@ class SettingsDialog(QDialog):
         self.temp_settings[active_provider]["model"] = self.model_combo.currentText().strip()
         
         hotkey = self.hotkey_input.text().strip()
-        duration = self.duration_spin.value()
         insert_mode = self.mode_combo.currentData()
         transcription_mode = self.transcription_mode_combo.currentData()
-        prompt = self.prompt_input.toPlainText().strip()
         
         logger.info("Saving settings from configuration dialog UI")
         
@@ -361,10 +344,8 @@ class SettingsDialog(QDialog):
         
         # Save general fields
         self.config.set("hotkey", hotkey)
-        self.config.set("audio_duration_limit", duration)
         self.config.set("insert_mode", insert_mode)
         self.config.set("transcription_mode", transcription_mode)
-        self.config.set("system_prompt", prompt)
         
         logger.debug("SettingsDialog.save_settings exiting with accept")
         self.accept()
