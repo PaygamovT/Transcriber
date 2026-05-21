@@ -31,7 +31,7 @@ class HotkeyListener:
                 parts[i] = "<shift>"
             elif part_stripped == "alt":
                 parts[i] = "<alt>"
-            elif part_stripped in ("cmd", "win", "win_l", "win_r", "command", "super"):
+            elif part_stripped in ("cmd", "win", "win_l", "win_r", "command", "super", "windows"):
                 parts[i] = "<cmd>"
             elif part_stripped.startswith("<") and part_stripped.endswith(">"):
                 parts[i] = part_stripped
