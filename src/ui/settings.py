@@ -3,7 +3,7 @@ import os
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QTextEdit, QSpinBox, QComboBox, QPushButton, QFormLayout,
-    QGroupBox
+    QGroupBox, QStackedWidget, QWidget
 )
 from PyQt6.QtCore import Qt
 from src.config import ConfigManager
@@ -15,7 +15,7 @@ log_level_env = os.environ.get("LOG_LEVEL", "DEBUG").upper()
 logger.setLevel(getattr(logging, log_level_env, logging.DEBUG))
 
 class SettingsDialog(QDialog):
-    """Sleek and premium configuration dialog for the Transcriber application."""
+    """Ultra-premium configuration dialog with a tabbed layout and modern aesthetics."""
     
     def __init__(self, config: ConfigManager, parent=None):
         super().__init__(parent)
@@ -56,8 +56,7 @@ class SettingsDialog(QDialog):
         self.current_provider = "openrouter"
         
         self.setWindowTitle("Настройки Transcriber")
-        self.setMinimumSize(480, 520)
-        # Ensure it gets deleted when closed to reclaim idle RAM (essential for 40-60MB target)
+        self.setMinimumSize(540, 480)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         
         self.setup_ui()
@@ -68,93 +67,193 @@ class SettingsDialog(QDialog):
 
     def setup_ui(self):
         logger.debug("SettingsDialog.setup_ui entering")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
         
-        # Header / Title
-        header_label = QLabel("Параметры Transcriber")
-        header_label.setObjectName("HeaderLabel")
-        layout.addWidget(header_label)
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(24, 24, 24, 24)
+        main_layout.setSpacing(20)
         
-        # Form Layout inside GroupBox
-        form_group = QGroupBox()
-        form_group.setObjectName("FormGroup")
-        form_layout = QFormLayout(form_group)
-        form_layout.setContentsMargins(15, 15, 15, 15)
-        form_layout.setSpacing(12)
+        # 1. Header with Gear/Sparkle Icon
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(10)
         
-        # 0. API Provider
+        header_icon = QLabel("⚙️")
+        header_icon.setObjectName("HeaderIcon")
+        header_title = QLabel("Transcriber Settings")
+        header_title.setObjectName("HeaderLabel")
+        
+        header_layout.addWidget(header_icon)
+        header_layout.addWidget(header_title)
+        header_layout.addStretch()
+        
+        main_layout.addLayout(header_layout)
+        
+        # 2. Navigation Tabs Bar
+        tab_layout = QHBoxLayout()
+        tab_layout.setSpacing(16)
+        tab_layout.setContentsMargins(0, 0, 0, 4)
+        
+        self.api_tab_btn = QPushButton("❖  API Settings")
+        self.api_tab_btn.setObjectName("ActiveTab")
+        self.api_tab_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.api_tab_btn.clicked.connect(lambda: self.set_active_tab(0))
+        
+        self.rec_tab_btn = QPushButton("🎙️  Recording & Playback")
+        self.rec_tab_btn.setObjectName("InactiveTab")
+        self.rec_tab_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.rec_tab_btn.clicked.connect(lambda: self.set_active_tab(1))
+        
+        tab_layout.addWidget(self.api_tab_btn)
+        tab_layout.addWidget(self.rec_tab_btn)
+        tab_layout.addStretch()
+        
+        main_layout.addLayout(tab_layout)
+        
+        # 3. Stacked Content Widget inside nested container
+        self.content_card = QGroupBox()
+        self.content_card.setObjectName("ContentCard")
+        
+        card_layout = QVBoxLayout(self.content_card)
+        card_layout.setContentsMargins(20, 20, 20, 20)
+        card_layout.setSpacing(0)
+        
+        self.stacked_widget = QStackedWidget()
+        card_layout.addWidget(self.stacked_widget)
+        
+        # --- Page 1: API Settings ---
+        self.page_api = QWidget()
+        page_api_layout = QFormLayout(self.page_api)
+        page_api_layout.setContentsMargins(0, 0, 0, 0)
+        page_api_layout.setSpacing(16)
+        page_api_layout.setVerticalSpacing(18)
+        
+        # API Provider Combobox
         self.provider_combo = QComboBox()
         self.provider_combo.addItem("OpenRouter", "openrouter")
         self.provider_combo.addItem("OpenAI", "openai")
         self.provider_combo.addItem("Groq", "groq")
-        form_layout.addRow(QLabel("Провайдер API:"), self.provider_combo)
+        self.provider_combo.currentIndexChanged.connect(self.on_provider_changed)
+        page_api_layout.addRow(QLabel("API Provider"), self.provider_combo)
         
-        # 1. API Key
-        self.api_key_label = QLabel("API Ключ:")
+        # API Key (with inline visibility toggle button)
+        self.api_key_label = QLabel("API Key OpenRouter")
+        
+        api_key_container = QWidget()
+        api_key_container.setObjectName("ApiKeyContainer")
+        key_layout = QHBoxLayout(api_key_container)
+        key_layout.setContentsMargins(0, 0, 0, 0)
+        key_layout.setSpacing(4)
+        
         self.api_key_input = QLineEdit()
         self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        form_layout.addRow(self.api_key_label, self.api_key_input)
+        self.api_key_input.setObjectName("ApiKeyInput")
         
-        # 2. Model dropdown
+        self.toggle_visibility_btn = QPushButton("👁️")
+        self.toggle_visibility_btn.setObjectName("VisibilityButton")
+        self.toggle_visibility_btn.setFixedWidth(36)
+        self.toggle_visibility_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggle_visibility_btn.clicked.connect(self.toggle_password_visibility)
+        
+        key_layout.addWidget(self.api_key_input)
+        key_layout.addWidget(self.toggle_visibility_btn)
+        
+        page_api_layout.addRow(self.api_key_label, api_key_container)
+        
+        # Transcription Model
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)
-        form_layout.addRow(QLabel("Модель транскрипции:"), self.model_combo)
+        self.model_combo.setObjectName("ModelInput")
+        page_api_layout.addRow(QLabel("Transcription Model"), self.model_combo)
         
-        # Connect provider changed signal
-        self.provider_combo.currentIndexChanged.connect(self.on_provider_changed)
+        self.stacked_widget.addWidget(self.page_api)
         
-        # 3. Hotkey
+        # --- Page 2: Recording & Playback ---
+        self.page_rec = QWidget()
+        page_rec_layout = QFormLayout(self.page_rec)
+        page_rec_layout.setContentsMargins(0, 0, 0, 0)
+        page_rec_layout.setSpacing(16)
+        page_rec_layout.setVerticalSpacing(18)
+        
+        # Hotkey
         self.hotkey_input = QLineEdit()
         self.hotkey_input.setPlaceholderText("<ctrl>+<shift>+space")
-        form_layout.addRow(QLabel("Глобальная горячая клавиша:"), self.hotkey_input)
+        page_rec_layout.addRow(QLabel("Global Hotkey"), self.hotkey_input)
         
-        # 4. Safety duration limit
+        # Safety duration limit
         self.duration_spin = QSpinBox()
         self.duration_spin.setRange(5, 300)
         self.duration_spin.setSuffix(" сек")
-        form_layout.addRow(QLabel("Лимит записи:"), self.duration_spin)
+        page_rec_layout.addRow(QLabel("Recording Limit"), self.duration_spin)
         
-        # 5. Insert Mode dropdown
+        # Text Insert Mode
         self.mode_combo = QComboBox()
-        self.mode_combo.addItem("Копировать в буфер (Clipboard)", "clipboard")
         self.mode_combo.addItem("Печатать на курсоре (Typewriter)", "typewriter")
-        form_layout.addRow(QLabel("Режим вставки текста:"), self.mode_combo)
+        self.mode_combo.addItem("Копировать в буфер (Clipboard)", "clipboard")
+        page_rec_layout.addRow(QLabel("Text Insertion Mode"), self.mode_combo)
         
-        # 5b. Transcription Mode dropdown
+        # Transcription Mode
         self.transcription_mode_combo = QComboBox()
         self.transcription_mode_combo.addItem("Обычная транскрипция (Normal)", "normal")
         self.transcription_mode_combo.addItem("Очистка от повторов и пауз (Clean)", "clean")
         self.transcription_mode_combo.addItem("Очистка + Перевод на английский (Translate)", "translate")
-        form_layout.addRow(QLabel("Режим транскрипции:"), self.transcription_mode_combo)
+        page_rec_layout.addRow(QLabel("Transcription Mode"), self.transcription_mode_combo)
         
-        # 6. System Prompt
+        # System Prompt
         self.prompt_input = QTextEdit()
         self.prompt_input.setTabChangesFocus(True)
         self.prompt_input.setMaximumHeight(80)
-        form_layout.addRow(QLabel("Системный промпт ИИ:"), self.prompt_input)
+        page_rec_layout.addRow(QLabel("AI System Prompt"), self.prompt_input)
         
-        layout.addWidget(form_group)
+        self.stacked_widget.addWidget(self.page_rec)
         
-        # Buttons layout
+        main_layout.addWidget(self.content_card)
+        
+        # 4. Action Buttons Layout (Cancel / Save)
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
-        
-        self.save_button = QPushButton("Сохранить")
-        self.save_button.setObjectName("SaveButton")
-        self.save_button.clicked.connect(self.save_settings)
+        button_layout.setSpacing(12)
         
         self.cancel_button = QPushButton("Отмена")
         self.cancel_button.setObjectName("CancelButton")
+        self.cancel_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancel_button.clicked.connect(self.reject)
+        
+        self.save_button = QPushButton("Сохранить")
+        self.save_button.setObjectName("SaveButton")
+        self.save_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.save_button.clicked.connect(self.save_settings)
         
         button_layout.addStretch()
         button_layout.addWidget(self.cancel_button)
         button_layout.addWidget(self.save_button)
         
-        layout.addLayout(button_layout)
+        main_layout.addLayout(button_layout)
+        
         logger.debug("SettingsDialog.setup_ui exiting")
+
+    def set_active_tab(self, tab_index):
+        """Switches the active stack page and updates tab styles dynamically."""
+        logger.debug(f"SettingsDialog.set_active_tab: {tab_index}")
+        self.stacked_widget.setCurrentIndex(tab_index)
+        
+        if tab_index == 0:
+            self.api_tab_btn.setObjectName("ActiveTab")
+            self.rec_tab_btn.setObjectName("InactiveTab")
+        else:
+            self.api_tab_btn.setObjectName("InactiveTab")
+            self.rec_tab_btn.setObjectName("ActiveTab")
+            
+        # Re-apply stylesheets to refresh widget styles instantly
+        self.api_tab_btn.style().polish(self.api_tab_btn)
+        self.rec_tab_btn.style().polish(self.rec_tab_btn)
+
+    def toggle_password_visibility(self):
+        """Toggles the visibility of the API Key password characters."""
+        if self.api_key_input.echoMode() == QLineEdit.EchoMode.Password:
+            self.api_key_input.setEchoMode(QLineEdit.EchoMode.Normal)
+            self.toggle_visibility_btn.setText("🙈")
+        else:
+            self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+            self.toggle_visibility_btn.setText("👁️")
 
     def on_provider_changed(self):
         logger.debug("SettingsDialog.on_provider_changed entering")
@@ -172,8 +271,8 @@ class SettingsDialog(QDialog):
         # Update API key label and placeholder
         provider_names = {"openrouter": "OpenRouter", "openai": "OpenAI", "groq": "Groq"}
         p_name = provider_names.get(new_provider, "API")
-        self.api_key_label.setText(f"API Ключ {p_name}:")
-        self.api_key_input.setPlaceholderText(f"Вставьте ключ API {p_name}...")
+        self.api_key_label.setText(f"API Key {p_name}")
+        self.api_key_input.setPlaceholderText("Enter your API Key...")
         
         # Load values from temp settings for the new provider
         self.api_key_input.setText(self.temp_settings[new_provider]["api_key"])
@@ -197,20 +296,16 @@ class SettingsDialog(QDialog):
     def load_settings(self):
         logger.debug("SettingsDialog.load_settings entering")
         
-        # Block signals during loading to prevent double triggers
         self.provider_combo.blockSignals(True)
-        
         provider = self.config.get("provider") or "openrouter"
         self.current_provider = provider
         
-        # Set provider combo index
         idx = self.provider_combo.findData(provider)
         if idx >= 0:
             self.provider_combo.setCurrentIndex(idx)
-            
         self.provider_combo.blockSignals(False)
         
-        # Initialize temp settings with latest persistent data from config (just in case)
+        # Initialize temp settings with latest persistent data from config
         self.temp_settings["openrouter"]["api_key"] = self.config.get("openrouter_api_key")
         self.temp_settings["openrouter"]["model"] = self.config.get("openrouter_model")
         self.temp_settings["openai"]["api_key"] = self.config.get("openai_api_key")
@@ -275,73 +370,165 @@ class SettingsDialog(QDialog):
         self.accept()
 
     def apply_theme(self):
-        """Applies a sleek and premium dark QSS theme to the configuration UI."""
+        """Applies a high-fidelity, sketch-perfect dark QSS theme with rounded margins and gradients."""
         logger.debug("SettingsDialog.apply_theme entering")
         qss = """
             QDialog {
-                background-color: #121214;
+                background-color: #0D0F12;
                 font-family: 'Outfit', 'Inter', 'Segoe UI', sans-serif;
             }
-            QLabel {
-                color: #C4C4CC;
-                font-size: 12px;
-                font-weight: 500;
+            
+            /* Window Title/Header Styling */
+            #HeaderIcon {
+                font-size: 20px;
+                color: #C084FC;
             }
             #HeaderLabel {
                 color: #FFFFFF;
-                font-size: 18px;
-                font-weight: bold;
-                margin-bottom: 5px;
+                font-size: 20px;
+                font-weight: 700;
             }
-            #FormGroup {
-                border: 1px solid #202024;
+            
+            /* Tabs Navigation */
+            QPushButton#ActiveTab {
+                background-color: transparent;
+                border: none;
+                color: #C084FC;
+                font-size: 14px;
+                font-weight: 600;
+                padding: 8px 4px;
+                border-bottom: 2px solid #C084FC;
+            }
+            QPushButton#InactiveTab {
+                background-color: transparent;
+                border: none;
+                color: #8C8E98;
+                font-size: 14px;
+                font-weight: 600;
+                padding: 8px 4px;
+            }
+            QPushButton#InactiveTab:hover {
+                color: #C4C4CC;
+            }
+            
+            /* Nested Card Layout */
+            #ContentCard {
+                border: 1px solid #1E202A;
                 border-radius: 8px;
-                background-color: #1A1A1E;
+                background-color: #1A1C23;
+                margin-top: 10px;
             }
+            
+            /* Form Labels */
+            QLabel {
+                color: #C4C4CC;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            
+            /* Inputs and Fields */
             QLineEdit, QTextEdit, QSpinBox, QComboBox {
-                background-color: #202024;
-                border: 1px solid #29292E;
+                background-color: #15171C;
+                border: 1px solid #232631;
                 border-radius: 6px;
-                padding: 6px 10px;
+                padding: 8px 12px;
                 color: #E1E1E6;
-                font-size: 12px;
+                font-size: 13px;
             }
             QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QComboBox:focus {
-                border: 1px solid #8F2DFF;
-                background-color: #25252A;
+                border: 1px solid #C084FC;
+                background-color: #191B22;
             }
+            
+            /* Highlights for active editing fields (matching white boxes in sketch) */
+            QLineEdit#ApiKeyInput, QComboBox#ModelInput {
+                background-color: #FFFFFF;
+                border: 1px solid #E1E1E6;
+                color: #0D0F12;
+            }
+            QLineEdit#ApiKeyInput:focus, QComboBox#ModelInput:focus {
+                border: 2px solid #C084FC;
+                background-color: #FFFFFF;
+                color: #0D0F12;
+            }
+            
+            /* API Key Layout Inner Container */
+            #ApiKeyContainer {
+                background: transparent;
+                border: none;
+            }
+            
+            /* Password Visibility Button */
+            #VisibilityButton {
+                background-color: #15171C;
+                border: 1px solid #232631;
+                border-radius: 6px;
+                color: #A8A8B3;
+                font-size: 14px;
+                padding: 4px;
+            }
+            #VisibilityButton:hover {
+                background-color: #191B22;
+                border: 1px solid #C084FC;
+                color: #FFFFFF;
+            }
+            
+            /* Custom dropdown styling */
             QComboBox::drop-down {
                 border: none;
-                width: 20px;
+                width: 24px;
             }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #8C8E98;
+                width: 0;
+                height: 0;
+                margin-right: 8px;
+            }
+            QComboBox::down-arrow:hover {
+                border-top-color: #C084FC;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #1A1C23;
+                border: 1px solid #232631;
+                selection-background-color: #C084FC;
+                selection-color: #FFFFFF;
+                color: #E1E1E6;
+            }
+            
+            /* Bottom Action Buttons */
             QPushButton {
-                font-size: 12px;
+                font-size: 13px;
                 font-weight: 600;
                 border-radius: 6px;
-                padding: 8px 16px;
+                padding: 10px 20px;
             }
+            
             #SaveButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #8F2DFF, stop:1 #6200EE);
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #A855F7, stop:1 #7C3AED);
                 color: #FFFFFF;
                 border: none;
             }
             #SaveButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #A24BFF, stop:1 #7016FF);
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #C084FC, stop:1 #8B5CF6);
             }
             #SaveButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7A1EFF, stop:1 #5300CC);
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #9333EA, stop:1 #6D28D9);
             }
+            
             #CancelButton {
                 background-color: transparent;
-                border: 1px solid #29292E;
+                border: 1px solid #232631;
                 color: #A8A8B3;
             }
             #CancelButton:hover {
-                background-color: #202024;
+                background-color: #15171C;
                 color: #E1E1E6;
             }
             #CancelButton:pressed {
-                background-color: #1A1A1E;
+                background-color: #0D0F12;
             }
         """
         self.setStyleSheet(qss)

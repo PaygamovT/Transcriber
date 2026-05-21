@@ -86,8 +86,8 @@ def test_settings_dialog_initialization():
         
         # Verify basic parameters
         assert dialog.title == "Настройки Transcriber"
-        assert dialog.min_w == 480
-        assert dialog.min_h == 520
+        assert dialog.min_w == 540
+        assert dialog.min_h == 480
         assert dialog._attributes["WA_DeleteOnClose"] == True
         assert len(dialog._stylesheet) > 0
 
@@ -147,8 +147,8 @@ def test_settings_dialog_provider_switching():
         assert dialog.temp_settings["openrouter"]["model"] == "google/gemini-3.1-flash-lite"
 
         # Verify UI updates for new provider (OpenAI)
-        mock_api_key_label.setText.assert_called_with("API Ключ OpenAI:")
-        mock_api_key_input.setPlaceholderText.assert_called_with("Вставьте ключ API OpenAI...")
+        mock_api_key_label.setText.assert_called_with("API Key OpenAI")
+        mock_api_key_input.setPlaceholderText.assert_called_with("Enter your API Key...")
         mock_api_key_input.setText.assert_called_with("oa-key")
         mock_model_combo.clear.assert_called()
 
