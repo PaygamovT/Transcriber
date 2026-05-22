@@ -19,17 +19,17 @@
 Приложение использует библиотеки `sounddevice` и `pynput` для захвата звука и клавиатурных событий. Для работы `sounddevice` на некоторых системах могут потребоваться дополнительные системные библиотеки.
 
 ### Windows
-На Windows всё необходимое ПО компилируется автоматически при установке Python-пакетов.
+На Windows всё необходимое ПО устанавливается автоматически при установке Python-пакетов из `requirements.txt`.
 Установите пакеты через pip:
 ```bash
-pip install PyQt6 sounddevice numpy pynput requests
+pip install -r requirements.txt
 ```
 
 ### macOS
 На macOS для работы `sounddevice` требуется библиотека `portaudio`. Установите её через Homebrew перед запуском:
 ```bash
 brew install portaudio
-pip install PyQt6 sounddevice numpy pynput requests
+pip install -r requirements.txt
 ```
 
 ---
