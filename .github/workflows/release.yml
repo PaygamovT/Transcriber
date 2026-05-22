@@ -36,23 +36,28 @@ jobs:
       - name: Install System Dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install portaudio
+          brew install portaudio upx
+
+      - name: Install UPX (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install upx -y
 
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install PyQt6 sounddevice numpy pynput requests Pillow pyinstaller keyboard
+          pip install PyQt6 sounddevice numpy pynput requests pyinstaller keyboard
 
       - name: Build Application (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          pyinstaller --noconfirm --onedir --windowed --icon="transcriber_logo.ico" --name="Transcriber" --hidden-import="keyboard" src/main.py
+          pyinstaller --noconfirm --onedir --windowed --icon="transcriber_logo.ico" --name="Transcriber" --hidden-import="keyboard" --exclude-module="PyQt6.QtNetwork" --exclude-module="PyQt6.QtSql" --exclude-module="PyQt6.QtXml" --exclude-module="PyQt6.QtQml" --exclude-module="PyQt6.QtQuick" --exclude-module="PyQt6.QtWebEngineCore" --exclude-module="PyQt6.QtSvg" --exclude-module="PyQt6.QtMultimedia" --exclude-module="PyQt6.QtTest" --exclude-module="PyQt6.QtBluetooth" --exclude-module="PyQt6.QtNfc" --exclude-module="PyQt6.QtPositioning" --exclude-module="PyQt6.QtSensors" --exclude-module="PyQt6.QtWebChannel" --exclude-module="PyQt6.QtWebSockets" --exclude-module="PyQt6.QtWebView" --exclude-module="PyQt6.QtPdf" --exclude-module="PyQt6.QtPdfWidgets" --exclude-module="tkinter" --exclude-module="unittest" src/main.py
 
       - name: Build Application (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           # Convert icon to ICNS for macOS or just build with standard options
-          pyinstaller --noconfirm --onedir --windowed --name="Transcriber" --hidden-import="keyboard" src/main.py
+          pyinstaller --noconfirm --onedir --windowed --name="Transcriber" --hidden-import="keyboard" --exclude-module="PyQt6.QtNetwork" --exclude-module="PyQt6.QtSql" --exclude-module="PyQt6.QtXml" --exclude-module="PyQt6.QtQml" --exclude-module="PyQt6.QtQuick" --exclude-module="PyQt6.QtWebEngineCore" --exclude-module="PyQt6.QtSvg" --exclude-module="PyQt6.QtMultimedia" --exclude-module="PyQt6.QtTest" --exclude-module="PyQt6.QtBluetooth" --exclude-module="PyQt6.QtNfc" --exclude-module="PyQt6.QtPositioning" --exclude-module="PyQt6.QtSensors" --exclude-module="PyQt6.QtWebChannel" --exclude-module="PyQt6.QtWebSockets" --exclude-module="PyQt6.QtWebView" --exclude-module="PyQt6.QtPdf" --exclude-module="PyQt6.QtPdfWidgets" --exclude-module="tkinter" --exclude-module="unittest" src/main.py
 
       - name: Create Release Artifact (Windows)
         if: matrix.os == 'windows-latest'
